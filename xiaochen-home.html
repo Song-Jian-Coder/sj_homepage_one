@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小陈同学 · AI 自媒体创作者</title>
+<meta name="description" content="小陈同学，AI 自媒体创作者。分享 AI 工具实测、创作工作流与个人 IP 方法论。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* ——— 配色（3 个主色 + 中性阶）——— */
+    --bg:            #08090a;
+    --bg-elevated:   #0f1011;
+    --surface:       #131415;
+    --border:        #1f2023;
+    --border-strong: #2b2d31;
+    --text:          #f7f8f8;
+    --text-muted:    #8a8f98;
+    --text-dim:      #62666d;
+    --accent:        #5e6ad2;   /* Linear 靛蓝紫 */
+    --accent-soft:   rgba(94,106,210,.12);
+    --accent-line:   rgba(94,106,210,.32);
+
+    /* ——— 排版 ——— */
+    --font-sans: 'Inter','PingFang SC','Hiragino Sans GB','Microsoft YaHei',system-ui,-apple-system,sans-serif;
+    --font-mono: 'JetBrains Mono','SFMono-Regular',Consolas,monospace;
+
+    /* ——— 尺寸节奏 ——— */
+    --radius-sm: 6px;
+    --radius:    10px;
+    --radius-lg: 14px;
+    --maxw: 1080px;
+    --gutter: 24px;
+    --section-y: 112px;
+
+    --ease: cubic-bezier(.22,.61,.36,1);
+  }
+
+  *,*::before,*::after{ box-sizing:border-box; }
+
+  html{ scroll-behavior:smooth; -webkit-text-size-adjust:100%; }
+
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--font-sans);
+    font-size:16px;
+    line-height:1.65;
+    letter-spacing:-0.011em;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    overflow-x:hidden;
+  }
+
+  /* 顶部极淡的径向光，Linear 风格的一点氛围，不是渐变堆砌 */
+  body::before{
+    content:'';
+    position:fixed;
+    top:-320px; left:50%;
+    width:min(900px,120vw); height:640px;
+    transform:translateX(-50%);
+    background:radial-gradient(ellipse at center, rgba(94,106,210,.13), transparent 68%);
+    pointer-events:none;
+    z-index:0;
+  }
+
+  a{ color:inherit; text-decoration:none; }
+  img{ max-width:100%; display:block; }
+  ::selection{ background:var(--accent); color:#fff; }
+
+  :focus-visible{
+    outline:2px solid var(--accent);
+    outline-offset:3px;
+    border-radius:4px;
+  }
+
+  .wrap{
+    width:100%;
+    max-width:var(--maxw);
+    margin:0 auto;
+    padding:0 var(--gutter);
+    position:relative;
+    z-index:1;
+  }
+
+  /* ——————————————— 导航 ——————————————— */
+  header{
+    position:sticky; top:0; z-index:50;
+    border-bottom:1px solid transparent;
+    background:rgba(8,9,10,.72);
+    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);
+    transition:border-color .3s var(--ease);
+  }
+  header.scrolled{ border-bottom-color:var(--border); }
+
+  .nav{
+    height:64px;
+    display:flex; align-items:center; justify-content:space-between; gap:20px;
+  }
+
+  .brand{
+    display:flex; align-items:center; gap:10px;
+    font-weight:600; font-size:15px;
+    letter-spacing:-0.02em;
+    white-space:nowrap;
+  }
+  .brand-mark{
+    width:26px; height:26px; flex:none;
+    border-radius:8px;
+    background:var(--accent);
+    display:grid; place-items:center;
+    font-size:12px; font-weight:700; color:#fff;
+    letter-spacing:0;
+  }
+
+  .nav-links{
+    display:flex; align-items:center; gap:4px;
+    font-size:14px; color:var(--text-muted);
+  }
+  .nav-links a{
+    padding:7px 12px; border-radius:var(--radius-sm);
+    transition:color .18s var(--ease), background-color .18s var(--ease);
+  }
+  .nav-links a:hover{ color:var(--text); background:var(--surface); }
+
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    height:38px; padding:0 16px;
+    border-radius:var(--radius-sm);
+    font-size:14px; font-weight:500; letter-spacing:-0.01em;
+    border:1px solid transparent;
+    cursor:pointer;
+    white-space:nowrap;
+    transition:background-color .18s var(--ease), border-color .18s var(--ease), color .18s var(--ease), transform .18s var(--ease);
+  }
+  .btn-primary{ background:var(--accent); color:#fff; }
+  .btn-primary:hover{ background:#6b76da; }
+  .btn-primary:active{ transform:translateY(1px); }
+  .btn-ghost{
+    border-color:var(--border-strong);
+    color:var(--text);
+    background:transparent;
+  }
+  .btn-ghost:hover{ background:var(--surface); border-color:#3a3d43; }
+
+  .nav-toggle{
+    display:none;
+    width:38px; height:38px;
+    border:1px solid var(--border-strong);
+    border-radius:var(--radius-sm);
+    background:transparent; color:var(--text);
+    align-items:center; justify-content:center;
+    cursor:pointer;
+  }
+  .nav-toggle:hover{ background:var(--surface); }
+  .nav-toggle span{
+    display:block; width:16px; height:1.5px; background:currentColor; border-radius:2px;
+    position:relative;
+  }
+  .nav-toggle span::before,
+  .nav-toggle span::after{
+    content:''; position:absolute; left:0; width:16px; height:1.5px;
+    background:currentColor; border-radius:2px;
+    transition:transform .2s var(--ease);
+  }
+  .nav-toggle span::before{ top:-5px; }
+  .nav-toggle span::after{ top:5px; }
+
+  /* ——————————————— Hero ——————————————— */
+  .hero{
+    padding:clamp(72px,11vw,132px) 0 clamp(64px,9vw,104px);
+    border-bottom:1px solid var(--border);
+  }
+
+  .pill{
+    display:inline-flex; align-items:center; gap:8px;
+    height:28px; padding:0 11px 0 9px;
+    border:1px solid var(--border-strong);
+    border-radius:100px;
+    background:var(--bg-elevated);
+    font-size:12.5px; color:var(--text-muted);
+    margin-bottom:26px;
+  }
+  .dot{
+    width:6px; height:6px; border-radius:50%;
+    background:#3fb950; flex:none;
+    box-shadow:0 0 0 3px rgba(63,185,80,.14);
+  }
+
+  h1{
+    margin:0 0 22px;
+    font-size:clamp(36px,6.2vw,62px);
+    line-height:1.08;
+    font-weight:600;
+    letter-spacing:-0.035em;
+    max-width:16ch;
+  }
+  h1 .accent{
+    color:var(--accent);
+    /* 极克制的强调：只有颜色，没有渐变文字 */
+  }
+
+  .lede{
+    margin:0 0 34px;
+    font-size:clamp(15.5px,1.6vw,18px);
+    line-height:1.72;
+    color:var(--text-muted);
+    max-width:60ch;
+  }
+
+  .hero-actions{
+    display:flex; flex-wrap:wrap; gap:10px;
+    margin-bottom:56px;
+  }
+
+  .stats{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:1px;
+    background:var(--border);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .stat{
+    background:var(--bg);
+    padding:20px 18px;
+  }
+  .stat b{
+    display:block;
+    font-size:22px; font-weight:600; letter-spacing:-0.03em;
+    font-variant-numeric:tabular-nums;
+  }
+  .stat span{
+    font-size:12.5px; color:var(--text-dim); letter-spacing:0;
+  }
+
+  /* ——————————————— 通用 section ——————————————— */
+  section{ padding:var(--section-y) 0; border-bottom:1px solid var(--border); }
+  section:last-of-type{ border-bottom:none; }
+
+  .sec-head{ margin-bottom:48px; max-width:62ch; }
+  .sec-label{
+    display:block;
+    font-family:var(--font-mono);
+    font-size:11.5px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--accent);
+    margin-bottom:14px;
+  }
+  h2{
+    margin:0 0 14px;
+    font-size:clamp(24px,3vw,32px);
+    line-height:1.22;
+    font-weight:600;
+    letter-spacing:-0.028em;
+  }
+  .sec-head p{
+    margin:0;
+    color:var(--text-muted);
+    font-size:15.5px;
+    line-height:1.72;
+  }
+
+  /* ——————————————— 关于 ——————————————— */
+  .about{
+    display:grid;
+    grid-template-columns:1.15fr .85fr;
+    gap:56px;
+    align-items:start;
+  }
+  .about p{ color:var(--text-muted); margin:0 0 18px; font-size:15.5px; line-height:1.78; }
+  .about p:last-child{ margin-bottom:0; }
+  .about strong{ color:var(--text); font-weight:500; }
+
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius-lg);
+    padding:24px;
+  }
+  .card h3{
+    margin:0 0 16px;
+    font-size:13px; font-weight:500;
+    font-family:var(--font-mono);
+    letter-spacing:.1em; text-transform:uppercase;
+    color:var(--text-dim);
+  }
+  .fact-list{ list-style:none; margin:0; padding:0; }
+  .fact-list li{
+    display:flex; justify-content:space-between; gap:16px;
+    padding:11px 0;
+    border-bottom:1px solid var(--border);
+    font-size:14px;
+  }
+  .fact-list li:last-child{ border-bottom:none; padding-bottom:0; }
+  .fact-list li:first-child{ padding-top:0; }
+  .fact-list .k{ color:var(--text-dim); flex:none; }
+  .fact-list .v{ color:var(--text); text-align:right; }
+
+  /* ——————————————— 内容卡片 ——————————————— */
+  .grid-3{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:16px;
+  }
+
+  .post{
+    display:flex; flex-direction:column;
+    background:var(--bg-elevated);
+    border:1px solid var(--border);
+    border-radius:var(--radius-lg);
+    padding:22px;
+    transition:border-color .22s var(--ease), background-color .22s var(--ease), transform .22s var(--ease);
+  }
+  .post:hover{
+    border-color:var(--border-strong);
+    background:var(--surface);
+    transform:translateY(-2px);
+  }
+  .post-tag{
+    display:inline-block; align-self:flex-start;
+    font-family:var(--font-mono);
+    font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--accent);
+    background:var(--accent-soft);
+    border:1px solid var(--accent-line);
+    border-radius:5px;
+    padding:3px 8px;
+    margin-bottom:16px;
+  }
+  .post h3{
+    margin:0 0 10px;
+    font-size:16.5px; font-weight:500; line-height:1.45;
+    letter-spacing:-0.018em;
+  }
+  .post p{
+    margin:0 0 20px;
+    font-size:14.5px; line-height:1.7;
+    color:var(--text-muted);
+    flex:1;
+  }
+  .post-meta{
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:12.5px; color:var(--text-dim);
+    font-variant-numeric:tabular-nums;
+  }
+  .post-meta .go{
+    color:var(--text-muted);
+    transition:color .18s var(--ease), transform .18s var(--ease);
+  }
+  .post:hover .go{ color:var(--accent); transform:translateX(3px); }
+
+  /* ——————————————— 工作流 ——————————————— */
+  .steps{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:1px;
+    background:var(--border);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .step{
+    background:var(--bg-elevated);
+    padding:26px 22px 28px;
+    transition:background-color .22s var(--ease);
+  }
+  .step:hover{ background:var(--surface); }
+  .step-num{
+    font-family:var(--font-mono);
+    font-size:12px; color:var(--accent);
+    display:block; margin-bottom:16px;
+  }
+  .step h3{ margin:0 0 8px; font-size:15px; font-weight:500; letter-spacing:-0.015em; }
+  .step p{ margin:0; font-size:14px; line-height:1.68; color:var(--text-muted); }
+
+  /* ——————————————— 工具 ——————————————— */
+  .tools{ display:flex; flex-wrap:wrap; gap:8px; }
+  .tool{
+    font-size:13.5px;
+    padding:7px 13px;
+    border:1px solid var(--border);
+    border-radius:100px;
+    background:var(--bg-elevated);
+    color:var(--text-muted);
+    transition:color .18s var(--ease), border-color .18s var(--ease), background-color .18s var(--ease);
+  }
+  .tool:hover{
+    color:var(--text);
+    border-color:var(--border-strong);
+    background:var(--surface);
+  }
+
+  /* ——————————————— CTA ——————————————— */
+  .cta{
+    text-align:center;
+    padding:clamp(64px,9vw,104px) 32px;
+    border:1px solid var(--border);
+    border-radius:var(--radius-lg);
+    background:var(--bg-elevated);
+  }
+  .cta h2{ max-width:22ch; margin-inline:auto; }
+  .cta p{
+    color:var(--text-muted);
+    max-width:46ch;
+    margin:0 auto 30px;
+    font-size:15.5px;
+  }
+  .cta-actions{ display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+
+  /* ——————————————— 页脚 ——————————————— */
+  footer{
+    border-top:1px solid var(--border);
+    padding:40px 0;
+    margin-top:var(--section-y);
+  }
+  .foot{
+    display:flex; flex-wrap:wrap; gap:20px;
+    align-items:center; justify-content:space-between;
+    font-size:13.5px; color:var(--text-dim);
+  }
+  .foot-links{ display:flex; flex-wrap:wrap; gap:20px; }
+  .foot-links a{ transition:color .18s var(--ease); }
+  .foot-links a:hover{ color:var(--text); }
+
+  /* ——————————————— 进场淡入 ——————————————— */
+  .reveal{
+    opacity:0;
+    transform:translateY(14px);
+    transition:opacity .6s var(--ease), transform .6s var(--ease);
+    will-change:opacity, transform;
+  }
+  .reveal.in{ opacity:1; transform:none; }
+
+  @media (prefers-reduced-motion:reduce){
+    html{ scroll-behavior:auto; }
+    *,*::before,*::after{
+      animation-duration:.001ms !important;
+      transition-duration:.001ms !important;
+    }
+    .reveal{ opacity:1; transform:none; }
+  }
+
+  /* ——————————————— 响应式 ——————————————— */
+  @media (max-width:900px){
+    :root{ --section-y:80px; }
+    .about{ grid-template-columns:1fr; gap:36px; }
+    .grid-3{ grid-template-columns:1fr 1fr; }
+    .steps{ grid-template-columns:1fr 1fr; }
+    .grid-3 > :last-child{ grid-column:1 / -1; }
+  }
+
+  @media (max-width:680px){
+    :root{ --gutter:20px; --section-y:68px; }
+    .nav-links{ display:none; }
+    .nav-cta{ display:none; }
+    .nav-toggle{ display:flex; }
+
+    .nav-links.open{
+      display:flex;
+      position:absolute; top:64px; left:0; right:0;
+      flex-direction:column; align-items:stretch; gap:2px;
+      padding:10px var(--gutter) 16px;
+      background:var(--bg-elevated);
+      border-bottom:1px solid var(--border);
+    }
+    .nav-links.open a{ padding:11px 12px; }
+
+    .stats{ grid-template-columns:1fr 1fr; }
+    .grid-3{ grid-template-columns:1fr; }
+    .grid-3 > :last-child{ grid-column:auto; }
+    .steps{ grid-template-columns:1fr; }
+    .hero-actions .btn{ flex:1 1 auto; }
+    .cta-actions .btn{ flex:1 1 auto; }
+    .foot{ flex-direction:column; align-items:flex-start; gap:16px; }
+  }
+</style>
+</head>
+<body>
+
+<header id="top">
+  <div class="wrap nav">
+    <a href="#top" class="brand">
+      <span class="brand-mark" aria-hidden="true">陈</span>
+      小陈同学
+    </a>
+
+    <nav class="nav-links" id="navLinks">
+      <a href="#about">关于</a>
+      <a href="#work">内容</a>
+      <a href="#flow">工作流</a>
+      <a href="#stack">工具箱</a>
+    </nav>
+
+    <div style="display:flex;align-items:center;gap:10px">
+      <a href="#contact" class="btn btn-primary nav-cta">合作联系</a>
+      <button class="nav-toggle" id="navToggle" aria-label="展开菜单" aria-expanded="false" aria-controls="navLinks">
+        <span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ——— Hero ——— -->
+  <section class="hero">
+    <div class="wrap">
+      <div class="pill reveal">
+        <span class="dot" aria-hidden="true"></span>
+        本周更新 · AI 视频工作流拆解
+      </div>
+
+      <h1 class="reveal">用 AI 把一个人的产能，<span class="accent">放大成一间工作室</span></h1>
+
+      <p class="lede reveal">
+        我是小陈同学，独立 AI 自媒体创作者。三年来我持续实测各类 AI 工具，
+        把「选题 → 脚本 → 成片 → 分发」整条链路压缩进一个人的日常，
+        并把每一步的踩坑记录公开分享。
+      </p>
+
+      <div class="hero-actions reveal">
+        <a href="#work" class="btn btn-primary">看最新内容</a>
+        <a href="#about" class="btn btn-ghost">了解我的方法</a>
+      </div>
+
+      <div class="stats reveal">
+        <div class="stat"><b>12.6 万</b><span>全网关注者</span></div>
+        <div class="stat"><b>340+</b><span>原创内容</span></div>
+        <div class="stat"><b>3 年</b><span>持续更新</span></div>
+        <div class="stat"><b>28 个</b><span>深度实测工具</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ——— 关于 ——— -->
+  <section id="about">
+    <div class="wrap about">
+      <div>
+        <div class="sec-head reveal" style="margin-bottom:28px">
+          <span class="sec-label">关于我</span>
+          <h2>不做工具测评的搬运工，只交付可复用的流程</h2>
+        </div>
+
+        <div class="reveal">
+          <p>
+            2022 年我从一家广告公司离职，开始独立做内容。最开始我和大多数人一样，
+            追热点、试新工具、发一堆看起来很厉害但没人看的视频。
+          </p>
+          <p>
+            转折点是我意识到：<strong>观众不缺工具清单，缺的是把工具串成流程的人</strong>。
+            于是我把每期内容都改写成一个完整的工作流——输入是什么、中间经过哪几步、
+            输出长什么样、哪里最容易翻车。
+          </p>
+          <p>
+            现在我的内容主要分三类：AI 工具深度实测、从 0 到 1 的创作流程拆解，
+            以及个人 IP 冷启动的真实数据复盘。所有数据我都公开原始后台截图，
+            不美化，也不藏失败的那几次。
+          </p>
+        </div>
+      </div>
+
+      <aside class="card reveal">
+        <h3>Quick Facts</h3>
+        <ul class="fact-list">
+          <li><span class="k">坐标</span><span class="v">杭州 · 远程</span></li>
+          <li><span class="k">主阵地</span><span class="v">视频号 / B 站</span></li>
+          <li><span class="k">更新频率</span><span class="v">每周二、周五</span></li>
+          <li><span class="k">擅长领域</span><span class="v">AI 视频 · 工作流</span></li>
+          <li><span class="k">当前在做</span><span class="v">《AI 创作者手册》</span></li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ——— 内容 ——— -->
+  <section id="work">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="sec-label">最新内容</span>
+        <h2>近期更新</h2>
+        <p>每一期都附带完整的流程文档与提示词，看到最后可以直接拿去用。</p>
+      </div>
+
+      <div class="grid-3">
+        <a href="#work" class="post reveal">
+          <span class="post-tag">工作流</span>
+          <h3>一个人做完一支片：我的 AI 视频全流程</h3>
+          <p>从选题库到成片导出，把 6 个小时的活压进 90 分钟。含完整提示词与分镜模板。</p>
+          <div class="post-meta">
+            <span>2025-06-18 · 12 分钟</span>
+            <span class="go" aria-hidden="true">→</span>
+          </div>
+        </a>
+
+        <a href="#work" class="post reveal">
+          <span class="post-tag">实测</span>
+          <h3>连续用 30 天 AI 剪辑后，我留下了这 4 个</h3>
+          <p>试了 11 款剪辑工具，淘汰 7 款。说说它们分别在什么场景下真的值得付费。</p>
+          <div class="post-meta">
+            <span>2025-06-11 · 9 分钟</span>
+            <span class="go" aria-hidden="true">→</span>
+          </div>
+        </a>
+
+        <a href="#work" class="post reveal">
+          <span class="post-tag">复盘</span>
+          <h3>0 到 10 万粉，我做对的三件事和踩过的坑</h3>
+          <p>公开后台数据：哪几条视频带来了 80% 的涨粉，以及那几条我以为会爆的为什么没爆。</p>
+          <div class="post-meta">
+            <span>2025-06-04 · 15 分钟</span>
+            <span class="go" aria-hidden="true">→</span>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ——— 工作流 ——— -->
+  <section id="flow">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="sec-label">工作流</span>
+        <h2>四步，把想法变成一条能发的片子</h2>
+        <p>这套流程我迭代了两年，核心不是用最贵的工具，而是每一步都可替换、可交付。</p>
+      </div>
+
+      <div class="steps">
+        <div class="step reveal">
+          <span class="step-num">01</span>
+          <h3>选题池</h3>
+          <p>从评论区、私信和工具更新日志里捞真实问题，一周攒 20 条，只留 2 条开做。</p>
+        </div>
+        <div class="step reveal">
+          <span class="step-num">02</span>
+          <h3>脚本与分镜</h3>
+          <p>先写 200 字核心观点，再用 AI 扩成口播稿，人工删掉所有正确的废话。</p>
+        </div>
+        <div class="step reveal">
+          <span class="step-num">03</span>
+          <h3>成片制作</h3>
+          <p>录音、AI 补画面、自动字幕、统一包装模板。素材进时间线时已经排好序。</p>
+        </div>
+        <div class="step reveal">
+          <span class="step-num">04</span>
+          <h3>分发与复盘</h3>
+          <p>一稿多剪适配各平台，48 小时后看数据，把结论写回选题池。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ——— 工具箱 ——— -->
+  <section id="stack">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="sec-label">工具箱</span>
+        <h2>日常真正在用的工具</h2>
+        <p>不追新，只留那些进入稳定生产流程的。</p>
+      </div>
+
+      <div class="tools reveal">
+        <span class="tool">Claude</span>
+        <span class="tool">ChatGPT</span>
+        <span class="tool">Midjourney</span>
+        <span class="tool">Runway</span>
+        <span class="tool">ElevenLabs</span>
+        <span class="tool">Descript</span>
+        <span class="tool">CapCut</span>
+        <span class="tool">Figma</span>
+        <span class="tool">Notion</span>
+        <span class="tool">Obsidian</span>
+        <span class="tool">Whisper</span>
+        <span class="tool">Perplexity</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ——— CTA ——— -->
+  <section id="contact" style="border-bottom:none">
+    <div class="wrap">
+      <div class="cta reveal">
+        <h2>想聊聊 AI 创作，或者有合作想法？</h2>
+        <p>商务合作、内容共创、课程咨询都欢迎。我一般在 24 小时内回复。</p>
+        <div class="cta-actions">
+          <a href="mailto:hi@xiaochen.studio" class="btn btn-primary">发邮件给我</a>
+          <a href="#top" class="btn btn-ghost">回到顶部</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>© 2025 小陈同学 · 用 AI 做内容，用内容讲 AI</span>
+    <div class="foot-links">
+      <a href="#work">视频号</a>
+      <a href="#work">B 站</a>
+      <a href="#work">小红书</a>
+      <a href="mailto:hi@xiaochen.studio">邮箱</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // 滚动时给导航加分割线
+  const header = document.querySelector('header');
+  const onScroll = () => header.classList.toggle('scrolled', window.scrollY > 8);
+  onScroll();
+  window.addEventListener('scroll', onScroll, { passive: true });
+
+  // 移动端菜单
+  const toggle = document.getElementById('navToggle');
+  const links  = document.getElementById('navLinks');
+  if (toggle && links) {
+    toggle.addEventListener('click', () => {
+      const open = links.classList.toggle('open');
+      toggle.setAttribute('aria-expanded', String(open));
+      toggle.setAttribute('aria-label', open ? '收起菜单' : '展开菜单');
+    });
+    links.addEventListener('click', (e) => {
+      if (e.target.tagName === 'A') {
+        links.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  // 进场淡入
+  const items = document.querySelectorAll('.reveal');
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((entry, i) => {
+        if (!entry.isIntersecting) return;
+        entry.target.style.transitionDelay = Math.min(i * 70, 280) + 'ms';
+        entry.target.classList.add('in');
+        io.unobserve(entry.target);
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+    items.forEach((el) => io.observe(el));
+  } else {
+    items.forEach((el) => el.classList.add('in'));
+  }
+</script>
+
+</body>
+</html>
