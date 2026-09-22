@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>申万行业分类 · 行业与个股浏览</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0b0d; --bg-elev:#101114; --surface:#16181c; --surface-2:#1c1f24; --surface-3:#23272d;
+  --border:#23262c; --border-strong:#2f333a;
+  --text:#e8eaed; --text-muted:#8b9199; --text-dim:#5f666e;
+  --up:#ff4d4f; --up-dim:rgba(255,77,79,.14); --up-line:rgba(255,77,79,.45);
+  --down:#00c48c; --down-dim:rgba(0,196,140,.14); --down-line:rgba(0,196,140,.45);
+  --accent:#5e6ad2; --accent-dim:rgba(94,106,210,.14); --accent-line:rgba(94,106,210,.35);
+  --font:'Inter','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+  --mono:'JetBrains Mono',Consolas,monospace;
+  --r-sm:6px; --r:10px; --r-lg:14px;
+  --ease:cubic-bezier(.22,.61,.36,1);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+  font-size:14px;line-height:1.5;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+::selection{background:var(--accent);color:#fff}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--text-muted)}
+
+/* 顶栏 */
+header{position:sticky;top:0;z-index:60;background:rgba(10,11,13,.88);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+.bar{display:flex;align-items:center;gap:16px;height:56px;max-width:1400px;margin:0 auto;padding:0 20px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14.5px;white-space:nowrap;flex:none}
+.brand-mark{width:24px;height:24px;border-radius:7px;background:var(--accent);
+  display:grid;place-items:center;font-size:11px;font-weight:700;color:#fff;flex:none}
+.bar-spacer{flex:1}
+.search{display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
+  transition:border-color .16s var(--ease);width:280px}
+.search:focus-within{border-color:var(--border-strong)}
+.search svg{flex:none;color:var(--text-dim)}
+.search input{background:none;border:none;outline:none;color:var(--text);
+  font-size:13px;font-family:inherit;width:100%;padding:0}
+.search input::placeholder{color:var(--text-dim)}
+
+/* 布局 */
+main{max-width:1400px;margin:0 auto;padding:18px 20px 40px}
+.warn{display:flex;align-items:flex-start;gap:9px;padding:12px 15px;margin-bottom:18px;
+  background:var(--accent-dim);border:1px solid var(--accent-line);border-radius:var(--r);
+  font-size:12.5px;color:#a9b0e0;line-height:1.6}
+.warn b{color:#c3c8f0;font-weight:600}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:2px;gap:2px}
+.seg button{padding:6px 13px;border-radius:4px;font-size:12.5px;color:var(--text-muted);
+  transition:background-color .16s var(--ease),color .16s var(--ease);white-space:nowrap}
+.seg button:hover{color:var(--text)}
+.seg button[aria-pressed="true"]{background:var(--surface-2);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.btn-sm{height:32px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface);font-size:12.5px;color:var(--text-muted);
+  transition:background-color .16s var(--ease),color .16s var(--ease),border-color .16s var(--ease)}
+.btn-sm:hover{background:var(--surface-2);color:var(--text);border-color:var(--border-strong)}
+.stat-inline{font-size:12.5px;color:var(--text-dim);margin-left:auto;white-space:nowrap}
+.stat-inline b{color:var(--text-muted);font-family:var(--mono);font-weight:500}
+
+/* 行业树 */
+.tree{background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+.l1{border-bottom:1px solid var(--border)}
+.l1:last-child{border-bottom:none}
+.l1-head{display:flex;align-items:center;gap:11px;width:100%;padding:14px 18px;
+  transition:background-color .15s var(--ease);text-align:left}
+.l1-head:hover{background:var(--surface)}
+.caret{width:13px;height:13px;flex:none;color:var(--text-dim);transition:transform .2s var(--ease)}
+[aria-expanded="true"] > .l1-head .caret,
+[aria-expanded="true"] > .l2-head .caret{transform:rotate(90deg)}
+.l1-name{font-size:15px;font-weight:600;letter-spacing:-.015em}
+.l1-code{font-family:var(--mono);font-size:11px;color:var(--text-dim)}
+.count{margin-left:auto;font-size:12px;color:var(--text-dim);font-family:var(--mono);flex:none}
+.l1-body,.l2-body,.l3-body{display:none}
+.l1[data-open="1"] > .l1-body,
+.l2[data-open="1"] > .l2-body,
+.l3[data-open="1"] > .l3-body{display:block}
+.l2{border-top:1px solid var(--border)}
+.l2-head{display:flex;align-items:center;gap:10px;width:100%;padding:11px 18px 11px 40px;
+  transition:background-color .15s var(--ease);text-align:left}
+.l2-head:hover{background:var(--surface)}
+.l2-name{font-size:13.5px;font-weight:500}
+.l2-code{font-family:var(--mono);font-size:11px;color:var(--text-dim)}
+.l3{border-top:1px solid var(--border)}
+.l3-head{display:flex;align-items:center;gap:10px;width:100%;padding:9px 18px 9px 62px;
+  transition:background-color .15s var(--ease);text-align:left}
+.l3-head:hover{background:var(--surface)}
+.l3-name{font-size:13px;color:var(--text-muted)}
+.tag-l3{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;
+  background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);flex:none}
+
+/* 股票网格 */
+.stocks{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));
+  gap:1px;background:var(--border);border-top:1px solid var(--border)}
+.stock{display:flex;align-items:center;gap:9px;padding:9px 14px 9px 74px;
+  background:var(--bg-elev);transition:background-color .14s var(--ease);text-align:left;width:100%}
+.stock:hover{background:var(--surface-2)}
+.stock-code{font-family:var(--mono);font-size:11.5px;color:var(--text-dim);flex:none}
+.stock-name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ex{font-size:10px;padding:1px 5px;border-radius:3px;border:1px solid var(--border);
+  color:var(--text-dim);flex:none;margin-left:auto}
+.hit{background:rgba(94,106,210,.1)}
+mark{background:rgba(94,106,210,.3);color:#cfd4ff;border-radius:2px;padding:0 1px}
+.empty{padding:56px 20px;text-align:center;color:var(--text-dim);font-size:13px}
+
+/* 抽屉 */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:100;opacity:0;
+  pointer-events:none;transition:opacity .24s var(--ease);
+  backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+.scrim.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(680px,100%);
+  background:var(--bg-elev);border-left:1px solid var(--border);z-index:101;
+  transform:translateX(100%);transition:transform .3s var(--ease);display:flex;flex-direction:column}
+.drawer.open{transform:none}
+.drawer-head{padding:20px 24px;border-bottom:1px solid var(--border);flex:none;position:relative}
+.drawer-title{font-size:21px;font-weight:600;letter-spacing:-.025em;margin-bottom:6px}
+.drawer-meta{font-size:12.5px;color:var(--text-dim);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.drawer-body{padding:20px 24px 32px;overflow-y:auto;flex:1}
+.drawer-close{position:absolute;top:18px;right:18px;width:32px;height:32px;border-radius:var(--r-sm);
+  display:grid;place-items:center;color:var(--text-muted);border:1px solid transparent;
+  transition:background-color .16s var(--ease),color .16s var(--ease)}
+.drawer-close:hover{background:var(--surface);color:var(--text)}
+
+/* 个股资金流 */
+.sum{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);
+  border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:20px}
+.sum-c{background:var(--surface);padding:14px 16px}
+.sum-l{font-size:11.5px;color:var(--text-dim);margin-bottom:6px}
+.sum-v{font-family:var(--mono);font-size:19px;font-weight:600;letter-spacing:-.03em}
+.range-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.range-bar .lbl{font-size:12.5px;color:var(--text-dim);margin-right:2px}
+.chart-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 14px 10px}
+.chart-title{font-size:12.5px;color:var(--text-muted);margin-bottom:12px;display:flex;
+  justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.chart-legend{display:flex;gap:14px;font-size:11.5px;color:var(--text-dim)}
+.lg{display:inline-flex;align-items:center;gap:5px}
+.sw{width:9px;height:9px;border-radius:2px;flex:none}
+svg.chart{display:block;width:100%;overflow:visible}
+.axis{font-size:10px;fill:var(--text-dim);font-family:var(--mono)}
+.grid-line{stroke:var(--border);stroke-width:1;stroke-dasharray:3 4}
+.tip{position:fixed;z-index:200;pointer-events:none;background:var(--surface-3);
+  border:1px solid var(--border-strong);border-radius:var(--r-sm);padding:9px 12px;
+  font-size:12px;box-shadow:0 10px 30px rgba(0,0,0,.6);opacity:0;transition:opacity .12s var(--ease);
+  white-space:nowrap;line-height:1.6}
+.tip.on{opacity:1}
+.tip-date{color:var(--text-dim);font-size:11px;margin-bottom:4px;font-family:var(--mono)}
+.tip-row{display:flex;justify-content:space-between;gap:14px;font-family:var(--mono)}
+
+.flow-btn{font-size:11px;padding:2px 8px;border-radius:100px;border:1px solid var(--border);
+  color:var(--text-dim);background:var(--surface);flex:none;transition:all .15s var(--ease);cursor:pointer}
+.flow-btn:hover{border-color:var(--accent-line);color:#a9b0e0;background:var(--accent-dim)}
+.flow-btn.active{border-color:var(--accent-line);color:#c3c8f0;background:var(--accent-dim)}
+.mode-badge{display:inline-block;padding:2px 8px;border-radius:100px;font-size:11px;
+  background:var(--accent-dim);border:1px solid var(--accent-line);color:#a9b0e0;flex:none}
+.comp-list{margin-top:8px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;max-height:320px;overflow-y:auto}
+.comp-item{display:flex;align-items:center;gap:10px;padding:8px 13px;background:var(--surface);
+  border-bottom:1px solid var(--border);width:100%;text-align:left;transition:background-color .14s var(--ease)}
+.comp-item:last-child{border-bottom:none}
+.comp-item:hover{background:var(--surface-2)}
+.comp-rank{font-family:var(--mono);font-size:11px;color:var(--text-dim);width:22px;flex:none}
+.comp-code{font-family:var(--mono);font-size:11.5px;color:var(--text-dim);flex:none}
+.comp-name{font-size:12.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.comp-val{font-family:var(--mono);font-size:12.5px;font-weight:500;flex:none}
+.tree-path{margin-top:22px;border-top:1px solid var(--border);padding-top:16px}
+.tp-t{font-size:11.5px;color:var(--text-dim);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px;font-weight:500}
+.tp-row{display:flex;gap:12px;padding:7px 0;font-size:13px;align-items:baseline}
+.tp-k{color:var(--text-dim);width:36px;flex:none;font-size:12px}
+.tp-v{color:var(--text)}
+.tp-v em{font-family:var(--mono);font-style:normal;font-size:11px;color:var(--text-dim);margin-left:6px}
+
+footer{border-top:1px solid var(--border);padding:22px 0;font-size:12px;color:var(--text-dim);
+  max-width:1400px;margin:0 auto;padding-left:20px;padding-right:20px}
+
+@media (max-width:860px){
+  .search{width:100%;order:3;margin-bottom:10px}
+  .bar{height:auto;flex-wrap:wrap;padding:10px 16px}
+  main{padding:14px 16px 32px}
+  .l1-head{padding:13px 14px}
+  .l2-head{padding:10px 14px 10px 30px}
+  .l3-head{padding:9px 14px 9px 46px}
+  .stock{padding:9px 12px 9px 52px}
+  .stocks{grid-template-columns:1fr}
+  .sum{grid-template-columns:1fr}
+  .drawer{width:100%}
+}
+.flow-btn{font-size:11px;padding:2px 8px;border-radius:100px;border:1px solid var(--border);
+  color:var(--text-dim);background:var(--surface);flex:none;transition:all .15s var(--ease);cursor:pointer}
+.flow-btn:hover{border-color:var(--accent-line);color:#a9b0e0;background:var(--accent-dim)}
+.flow-btn.active{border-color:var(--accent-line);color:#c3c8f0;background:var(--accent-dim)}
+.mode-badge{display:inline-block;padding:2px 8px;border-radius:100px;font-size:11px;
+  background:var(--accent-dim);border:1px solid var(--accent-line);color:#a9b0e0;flex:none}
+.comp-list{margin-top:8px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;max-height:320px;overflow-y:auto}
+.comp-item{display:flex;align-items:center;gap:10px;padding:8px 13px;background:var(--surface);
+  border-bottom:1px solid var(--border);width:100%;text-align:left;transition:background-color .14s var(--ease)}
+.comp-item:last-child{border-bottom:none}
+.comp-item:hover{background:var(--surface-2)}
+.comp-rank{font-family:var(--mono);font-size:11px;color:var(--text-dim);width:22px;flex:none}
+.comp-code{font-family:var(--mono);font-size:11.5px;color:var(--text-dim);flex:none}
+.comp-name{font-size:12.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.comp-val{font-family:var(--mono);font-size:12.5px;font-weight:500;flex:none}
+.tree-path{margin-top:22px;border-top:1px solid var(--border);padding-top:16px}
+.tp-t{font-size:11.5px;color:var(--text-dim);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px;font-weight:500}
+.tp-row{display:flex;gap:12px;padding:7px 0;font-size:13px;align-items:baseline}
+.tp-k{color:var(--text-dim);width:36px;flex:none;font-size:12px}
+.tp-v{color:var(--text)}
+.tp-v em{font-family:var(--mono);font-style:normal;font-size:11px;color:var(--text-dim);margin-left:6px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.001ms!important;animation-duration:.001ms!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="brand"><span class="brand-mark">申</span><span>行业分类浏览</span></div>
+    <div class="bar-spacer"></div>
+    <label class="search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+      </svg>
+      <input type="search" id="q" placeholder="搜索股票 / 行业 / 代码" autocomplete="off">
+    </label>
+  </div>
+</header>
+
+<main>
+  <div class="warn">
+    <span>⚠️</span>
+    <span><b>界面演示版</b>　行业层级与成分股为真实申万分类（31 个一级 / 131 个二级 / 336 个三级 / 5218 只股票，2026-09-21 版）；<b>个股资金流为模拟数据</b>，用于确认交互与视觉。</span>
+  </div>
+
+  <div class="toolbar">
+    <div class="seg" id="exSeg" role="group" aria-label="交易所筛选">
+      <button data-ex="all" aria-pressed="true">全部</button>
+      <button data-ex="1" aria-pressed="false">上交所</button>
+      <button data-ex="0" aria-pressed="false">深交所</button>
+    </div>
+    <button class="btn-sm" id="expandAll">全部展开</button>
+    <button class="btn-sm" id="collapseAll">全部收起</button>
+    <span class="stat-inline" id="statLine"></span>
+  </div>
+
+  <div class="tree" id="tree"></div>
+</main>
+
+<footer>数据分类：申万行业分类（2026-09-21 版）　·　不含投资建议</footer>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+  <button class="drawer-close" id="dClose" aria-label="关闭">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+      <path d="M5 5l14 14M19 5L5 19"/>
+    </svg>
+  </button>
+  <div class="drawer-head">
+    <div class="drawer-title" id="dTitle">—</div>
+    <div class="drawer-meta" id="dMeta"></div>
+  </div>
+  <div class="drawer-body" id="dBody"></div>
+</aside>
+<div class="tip" id="tip"></div>
+<script>
+/* ═══════════ 数据 ═══════════ */
+const TREE = [{"c":"801010","n":"农林牧渔","l2":[{"c":"801011","n":"林业Ⅱ","l3":[{"c":"850131","n":"林业Ⅲ","k":4}]},{"c":"801012","n":"农产品加工","l3":[{"c":"850151","n":"果蔬加工","k":5},{"c":"850152","n":"粮油加工","k":7},{"c":"850154","n":"其他农产品加工","k":11}]},{"c":"801014","n":"饲料","l3":[{"c":"850142","n":"畜禽饲料","k":11},{"c":"850143","n":"水产饲料","k":4},{"c":"850144","n":"宠物食品","k":3}]},{"c":"801015","n":"渔业","l3":[{"c":"850121","n":"海洋捕捞","k":2},{"c":"850122","n":"水产养殖","k":4}]},{"c":"801016","n":"种植业","l3":[{"c":"850111","n":"种子","k":8},{"c":"850112","n":"粮食种植","k":2},{"c":"850113","n":"其他种植业","k":6},{"c":"850114","n":"食用菌","k":4}]},{"c":"801017","n":"养殖业","l3":[{"c":"850172","n":"生猪养殖","k":11},{"c":"850173","n":"肉鸡养殖","k":8},{"c":"850174","n":"其他养殖","k":3}]},{"c":"801018","n":"动物保健Ⅱ","l3":[{"c":"850181","n":"动物保健Ⅲ","k":9}]},{"c":"801019","n":"农业综合Ⅱ","l3":[{"c":"850191","n":"农业综合Ⅲ","k":2}]}]},{"c":"801030","n":"基础化工","l2":[{"c":"801032","n":"化学纤维","l3":[{"c":"850341","n":"涤纶","k":10},{"c":"850343","n":"粘胶","k":3},{"c":"850344","n":"其他化学纤维","k":7},{"c":"850345","n":"氨纶","k":1},{"c":"850346","n":"锦纶","k":5}]},{"c":"801033","n":"化学原料","l3":[{"c":"850321","n":"纯碱","k":5},{"c":"850322","n":"氯碱","k":14},{"c":"850323","n":"无机盐","k":10},{"c":"850324","n":"其他化学原料","k":14},{"c":"850325","n":"煤化工","k":8},{"c":"850326","n":"钛白粉","k":6}]},{"c":"801034","n":"化学制品","l3":[{"c":"850135","n":"食品及饲料添加剂","k":23},{"c":"850136","n":"有机硅","k":10},{"c":"850137","n":"胶黏剂及胶带","k":5},{"c":"850335","n":"涂料油墨","k":17},{"c":"850337","n":"民爆制品","k":13},{"c":"850338","n":"纺织化学制品","k":13},{"c":"850339","n":"其他化学制品","k":73},{"c":"850372","n":"聚氨酯","k":8},{"c":"850382","n":"氟化工","k":10}]},{"c":"801036","n":"塑料","l3":[{"c":"850351","n":"其他塑料制品","k":19},{"c":"850353","n":"改性塑料","k":18},{"c":"850354","n":"合成树脂","k":14},{"c":"850355","n":"膜材料","k":21}]},{"c":"801037","n":"橡胶","l3":[{"c":"850362","n":"其他橡胶制品","k":9},{"c":"850363","n":"炭黑","k":6},{"c":"850364","n":"橡胶助剂","k":2}]},{"c":"801038","n":"农化制品","l3":[{"c":"850331","n":"氮肥","k":6},{"c":"850332","n":"磷肥及磷化工","k":9},{"c":"850333","n":"农药","k":30},{"c":"850336","n":"钾肥","k":4},{"c":"850381","n":"复合肥","k":10}]},{"c":"801039","n":"非金属材料Ⅱ","l3":[{"c":"850523","n":"非金属材料Ⅲ","k":8}]}]},{"c":"801040","n":"钢铁","l2":[{"c":"801043","n":"冶钢原料","l3":[{"c":"850431","n":"铁矿石","k":7},{"c":"850432","n":"冶钢辅料","k":3}]},{"c":"801044","n":"普钢","l3":[{"c":"850441","n":"长材","k":3},{"c":"850442","n":"板材","k":16},{"c":"850443","n":"钢铁管材","k":3}]},{"c":"801045","n":"特钢Ⅱ","l3":[{"c":"850412","n":"特钢Ⅲ","k":12}]}]},{"c":"801050","n":"有色金属","l2":[{"c":"801051","n":"金属新材料","l3":[{"c":"850521","n":"其他金属新材料","k":17},{"c":"850522","n":"磁性材料","k":15}]},{"c":"801053","n":"贵金属","l3":[{"c":"850531","n":"黄金","k":10},{"c":"850532","n":"白银","k":1}]},{"c":"801054","n":"小金属","l3":[{"c":"850541","n":"稀土","k":5},{"c":"850542","n":"钨","k":4},{"c":"850544","n":"其他小金属","k":15},{"c":"850545","n":"钼","k":3}]},{"c":"801055","n":"工业金属","l3":[{"c":"850551","n":"铝","k":30},{"c":"850552","n":"铜","k":17},{"c":"850553","n":"铅锌","k":12}]},{"c":"801056","n":"能源金属","l3":[{"c":"850543","n":"锂","k":7},{"c":"850561","n":"钴","k":3},{"c":"850562","n":"镍","k":1}]}]},{"c":"801080","n":"电子","l2":[{"c":"801081","n":"半导体","l3":[{"c":"850812","n":"分立器件","k":18},{"c":"850813","n":"半导体材料","k":26},{"c":"850814","n":"数字芯片设计","k":55},{"c":"850815","n":"模拟芯片设计","k":36},{"c":"850816","n":"集成电路制造","k":7},{"c":"850817","n":"集成电路封测","k":13},{"c":"850818","n":"半导体设备","k":26}]},{"c":"801082","n":"其他电子Ⅱ","l3":[{"c":"850841","n":"其他电子Ⅲ","k":33}]},{"c":"801083","n":"元件","l3":[{"c":"850822","n":"印制电路板","k":46},{"c":"850823","n":"被动元件","k":15}]},{"c":"801084","n":"光学光电子","l3":[{"c":"850831","n":"面板","k":38},{"c":"850832","n":"LED","k":30},{"c":"850833","n":"光学元件","k":25}]},{"c":"801085","n":"消费电子","l3":[{"c":"850853","n":"品牌消费电子","k":10},{"c":"850854","n":"消费电子零部件及组装","k":81}]},{"c":"801086","n":"电子化学品Ⅱ","l3":[{"c":"850861","n":"电子化学品Ⅲ","k":35}]}]},{"c":"801110","n":"家用电器","l2":[{"c":"801111","n":"白色家电","l3":[{"c":"851112","n":"空调","k":4},{"c":"851116","n":"冰洗","k":7}]},{"c":"801112","n":"黑色家电","l3":[{"c":"851121","n":"彩电","k":4},{"c":"851122","n":"其他黑色家电","k":5}]},{"c":"801113","n":"小家电","l3":[{"c":"851131","n":"厨房小家电","k":9},{"c":"851132","n":"清洁小家电","k":8},{"c":"851133","n":"个护小家电","k":3}]},{"c":"801114","n":"厨卫电器","l3":[{"c":"851141","n":"厨房电器","k":6},{"c":"851142","n":"卫浴电器","k":3}]},{"c":"801115","n":"照明设备Ⅱ","l3":[{"c":"851151","n":"照明设备Ⅲ","k":12}]},{"c":"801116","n":"家电零部件Ⅱ","l3":[{"c":"851161","n":"家电零部件Ⅲ","k":29}]},{"c":"801117","n":"其他家电Ⅱ","l3":[{"c":"851171","n":"其他家电Ⅲ","k":3}]}]},{"c":"801120","n":"食品饮料","l2":[{"c":"801124","n":"食品加工","l3":[{"c":"851241","n":"肉制品","k":7},{"c":"851246","n":"预加工食品","k":10},{"c":"851247","n":"保健品","k":8}]},{"c":"801125","n":"白酒Ⅱ","l3":[{"c":"851251","n":"白酒Ⅲ","k":19}]},{"c":"801126","n":"非白酒","l3":[{"c":"851232","n":"啤酒","k":7},{"c":"851233","n":"其他酒类","k":9}]},{"c":"801127","n":"饮料乳品","l3":[{"c":"851243","n":"乳品","k":18},{"c":"851271","n":"软饮料","k":8}]},{"c":"801128","n":"休闲食品","l3":[{"c":"851281","n":"零食","k":10},{"c":"851282","n":"烘焙食品","k":9},{"c":"851283","n":"熟食","k":3}]},{"c":"801129","n":"调味发酵品Ⅱ","l3":[{"c":"851242","n":"调味发酵品Ⅲ","k":14}]}]},{"c":"801130","n":"纺织服饰","l2":[{"c":"801131","n":"纺织制造","l3":[{"c":"851312","n":"棉纺","k":8},{"c":"851314","n":"印染","k":4},{"c":"851315","n":"辅料","k":3},{"c":"851316","n":"其他纺织","k":16},{"c":"851317","n":"纺织鞋类制造","k":1}]},{"c":"801132","n":"服装家纺","l3":[{"c":"851325","n":"鞋帽及其他","k":11},{"c":"851326","n":"家纺","k":6},{"c":"851328","n":"运动服装","k":4},{"c":"851329","n":"非运动服装","k":38}]},{"c":"801133","n":"饰品","l3":[{"c":"851331","n":"钟表珠宝","k":13},{"c":"851333","n":"其他饰品","k":2}]}]},{"c":"801140","n":"轻工制造","l2":[{"c":"801141","n":"包装印刷","l3":[{"c":"851422","n":"印刷","k":3},{"c":"851423","n":"金属包装","k":7},{"c":"851424","n":"塑料包装","k":6},{"c":"851425","n":"纸包装","k":19},{"c":"851426","n":"综合包装","k":5}]},{"c":"801142","n":"家居用品","l3":[{"c":"851436","n":"瓷砖地板","k":13},{"c":"851437","n":"成品家居","k":16},{"c":"851438","n":"定制家居","k":13},{"c":"851439","n":"卫浴制品","k":7},{"c":"851491","n":"其他家居用品","k":24}]},{"c":"801143","n":"造纸","l3":[{"c":"851412","n":"大宗用纸","k":11},{"c":"851413","n":"特种纸","k":12}]},{"c":"801145","n":"文娱用品","l3":[{"c":"851451","n":"文化用品","k":5},{"c":"851452","n":"娱乐用品","k":15}]}]},{"c":"801150","n":"医药生物","l2":[{"c":"801151","n":"化学制药","l3":[{"c":"851511","n":"原料药","k":42},{"c":"851512","n":"化学制剂","k":107}]},{"c":"801152","n":"生物制品","l3":[{"c":"851522","n":"血液制品","k":7},{"c":"851523","n":"疫苗","k":12},{"c":"851524","n":"其他生物制品","k":32}]},{"c":"801153","n":"医疗器械","l3":[{"c":"851532","n":"医疗设备","k":40},{"c":"851533","n":"医疗耗材","k":51},{"c":"851534","n":"体外诊断","k":38}]},{"c":"801154","n":"医药商业","l3":[{"c":"851542","n":"医药流通","k":24},{"c":"851543","n":"线下药店","k":8}]},{"c":"801155","n":"中药Ⅱ","l3":[{"c":"851521","n":"中药Ⅲ","k":66}]},{"c":"801156","n":"医疗服务","l3":[{"c":"851562","n":"诊断服务","k":5},{"c":"851563","n":"医疗研发外包","k":29},{"c":"851564","n":"医院","k":15},{"c":"851565","n":"其他医疗服务","k":2}]}]},{"c":"801160","n":"公用事业","l2":[{"c":"801161","n":"电力","l3":[{"c":"851610","n":"电能综合服务","k":16},{"c":"851611","n":"火力发电","k":29},{"c":"851612","n":"水力发电","k":12},{"c":"851614","n":"热力服务","k":19},{"c":"851616","n":"光伏发电","k":13},{"c":"851617","n":"风力发电","k":16},{"c":"851618","n":"核力发电","k":3},{"c":"851619","n":"其他能源发电","k":1}]},{"c":"801163","n":"燃气Ⅱ","l3":[{"c":"851631","n":"燃气Ⅲ","k":28}]}]},{"c":"801170","n":"交通运输","l2":[{"c":"801178","n":"物流","l3":[{"c":"851782","n":"原材料供应链服务","k":13},{"c":"851783","n":"中间产品及消费品供应链服务","k":8},{"c":"851784","n":"快递","k":4},{"c":"851785","n":"跨境物流","k":12},{"c":"851786","n":"仓储物流","k":6},{"c":"851787","n":"公路货运","k":4}]},{"c":"801179","n":"铁路公路","l3":[{"c":"851721","n":"公交","k":6},{"c":"851731","n":"高速公路","k":20},{"c":"851771","n":"铁路运输","k":7}]},{"c":"801991","n":"航空机场","l3":[{"c":"851741","n":"航空运输","k":8},{"c":"851751","n":"机场","k":4}]},{"c":"801992","n":"航运港口","l3":[{"c":"851711","n":"港口","k":16},{"c":"851761","n":"航运","k":18}]}]},{"c":"801180","n":"房地产","l2":[{"c":"801181","n":"房地产开发","l3":[{"c":"851811","n":"住宅开发","k":63},{"c":"851812","n":"商业地产","k":10},{"c":"851813","n":"产业地产","k":10}]},{"c":"801183","n":"房地产服务","l3":[{"c":"851831","n":"物业管理","k":8},{"c":"851832","n":"房产租赁经纪","k":3},{"c":"851833","n":"房地产综合服务","k":1}]}]},{"c":"801200","n":"商贸零售","l2":[{"c":"801202","n":"贸易Ⅱ","l3":[{"c":"852021","n":"贸易Ⅲ","k":12}]},{"c":"801203","n":"一般零售","l3":[{"c":"852031","n":"百货","k":20},{"c":"852032","n":"超市","k":8},{"c":"852033","n":"多业态零售","k":15},{"c":"852034","n":"商业物业经营","k":17}]},{"c":"801204","n":"专业连锁Ⅱ","l3":[{"c":"852041","n":"专业连锁Ⅲ","k":7}]},{"c":"801206","n":"互联网电商","l3":[{"c":"852061","n":"综合电商","k":3},{"c":"852062","n":"跨境电商","k":7},{"c":"852063","n":"电商服务","k":8}]},{"c":"801207","n":"旅游零售Ⅱ","l3":[{"c":"852071","n":"旅游零售Ⅲ","k":2}]}]},{"c":"801210","n":"社会服务","l2":[{"c":"801216","n":"体育Ⅱ","l3":[{"c":"852161","n":"体育Ⅲ","k":2}]},{"c":"801218","n":"专业服务","l3":[{"c":"852181","n":"人力资源服务","k":3},{"c":"852182","n":"检测服务","k":19},{"c":"852183","n":"会展服务","k":3},{"c":"852184","n":"其他专业服务","k":4}]},{"c":"801219","n":"酒店餐饮","l3":[{"c":"852121","n":"酒店","k":5},{"c":"852141","n":"餐饮","k":4}]},{"c":"801993","n":"旅游及景区","l3":[{"c":"852111","n":"人工景区","k":5},{"c":"852112","n":"自然景区","k":13},{"c":"852131","n":"旅游综合","k":7}]},{"c":"801994","n":"教育","l3":[{"c":"859851","n":"学历教育","k":2},{"c":"859852","n":"培训教育","k":13},{"c":"859853","n":"教育运营及其他","k":2}]}]},{"c":"801230","n":"综合","l2":[{"c":"801231","n":"综合Ⅱ","l3":[{"c":"852311","n":"综合Ⅲ","k":20}]}]},{"c":"801710","n":"建筑材料","l2":[{"c":"801711","n":"水泥","l3":[{"c":"857111","n":"水泥制造","k":14},{"c":"857112","n":"水泥制品","k":7}]},{"c":"801712","n":"玻璃玻纤","l3":[{"c":"857121","n":"玻璃制造","k":7},{"c":"857122","n":"玻纤制造","k":9}]},{"c":"801713","n":"装修建材","l3":[{"c":"850614","n":"其他建材","k":17},{"c":"850615","n":"耐火材料","k":6},{"c":"850616","n":"管材","k":7},{"c":"850617","n":"防水材料","k":3},{"c":"850618","n":"涂料","k":2}]}]},{"c":"801720","n":"建筑装饰","l2":[{"c":"801721","n":"房屋建设Ⅱ","l3":[{"c":"850623","n":"房屋建设Ⅲ","k":8}]},{"c":"801722","n":"装修装饰Ⅱ","l3":[{"c":"857221","n":"装修装饰Ⅲ","k":22}]},{"c":"801723","n":"基础建设","l3":[{"c":"857236","n":"基建市政工程","k":25},{"c":"857251","n":"园林工程","k":15}]},{"c":"801724","n":"专业工程","l3":[{"c":"857241","n":"钢结构","k":9},{"c":"857242","n":"化学工程","k":7},{"c":"857243","n":"国际工程","k":4},{"c":"857244","n":"其他专业工程","k":17}]},{"c":"801726","n":"工程咨询服务Ⅱ","l3":[{"c":"857261","n":"工程咨询服务Ⅲ","k":40}]}]},{"c":"801730","n":"电力设备","l2":[{"c":"801731","n":"电机Ⅱ","l3":[{"c":"850741","n":"电机Ⅲ","k":26}]},{"c":"801733","n":"其他电源设备Ⅱ","l3":[{"c":"857331","n":"综合电力设备商","k":2},{"c":"857334","n":"火电设备","k":3},{"c":"857336","n":"其他电源设备Ⅲ","k":27}]},{"c":"801735","n":"光伏设备","l3":[{"c":"857351","n":"硅料硅片","k":7},{"c":"857352","n":"光伏电池组件","k":22},{"c":"857353","n":"逆变器","k":10},{"c":"857354","n":"光伏辅材","k":18},{"c":"857355","n":"光伏加工设备","k":10}]},{"c":"801736","n":"风电设备","l3":[{"c":"857361","n":"风电整机","k":5},{"c":"857362","n":"风电零部件","k":26}]},{"c":"801737","n":"电池","l3":[{"c":"857371","n":"锂电池","k":27},{"c":"857372","n":"电池化学品","k":42},{"c":"857373","n":"锂电专用设备","k":18},{"c":"857374","n":"燃料电池","k":1},{"c":"857375","n":"蓄电池及其他电池","k":9}]},{"c":"801738","n":"电网设备","l3":[{"c":"857321","n":"电网自动化设备","k":26},{"c":"857323","n":"电工仪器仪表","k":13},{"c":"857344","n":"线缆部件及其他","k":35},{"c":"857381","n":"输变电设备","k":27},{"c":"857382","n":"配电设备","k":25}]}]},{"c":"801740","n":"国防军工","l2":[{"c":"801741","n":"航天装备Ⅱ","l3":[{"c":"857411","n":"航天装备Ⅲ","k":9}]},{"c":"801742","n":"航空装备Ⅱ","l3":[{"c":"857421","n":"航空装备Ⅲ","k":46}]},{"c":"801743","n":"地面兵装Ⅱ","l3":[{"c":"857431","n":"地面兵装Ⅲ","k":12}]},{"c":"801744","n":"航海装备Ⅱ","l3":[{"c":"850935","n":"航海装备Ⅲ","k":10}]},{"c":"801745","n":"军工电子Ⅱ","l3":[{"c":"857451","n":"军工电子Ⅲ","k":60}]}]},{"c":"801750","n":"计算机","l2":[{"c":"801101","n":"计算机设备","l3":[{"c":"850702","n":"安防设备","k":23},{"c":"850703","n":"其他计算机设备","k":59}]},{"c":"801103","n":"IT服务Ⅱ","l3":[{"c":"852226","n":"IT服务Ⅲ","k":122}]},{"c":"801104","n":"软件开发","l3":[{"c":"851041","n":"垂直应用软件","k":96},{"c":"851042","n":"横向通用软件","k":34}]}]},{"c":"801760","n":"传媒","l2":[{"c":"801764","n":"游戏Ⅱ","l3":[{"c":"857641","n":"游戏Ⅲ","k":26}]},{"c":"801765","n":"广告营销","l3":[{"c":"857651","n":"营销代理","k":25},{"c":"857652","n":"广告媒体","k":3}]},{"c":"801766","n":"影视院线","l3":[{"c":"857661","n":"影视动漫制作","k":15},{"c":"857662","n":"院线","k":4}]},{"c":"801767","n":"数字媒体","l3":[{"c":"857671","n":"视频媒体","k":1},{"c":"857673","n":"图片媒体","k":1},{"c":"857674","n":"门户网站","k":8},{"c":"857675","n":"文字媒体","k":1},{"c":"857676","n":"其他数字媒体","k":3}]},{"c":"801769","n":"出版","l3":[{"c":"857691","n":"教育出版","k":10},{"c":"857692","n":"大众出版","k":19}]},{"c":"801995","n":"电视广播Ⅱ","l3":[{"c":"859951","n":"电视广播Ⅲ","k":14}]}]},{"c":"801770","n":"通信","l2":[{"c":"801102","n":"通信设备","l3":[{"c":"851024","n":"通信网络设备及器件","k":35},{"c":"851025","n":"通信线缆及配套","k":12},{"c":"851026","n":"通信终端及配件","k":27},{"c":"851027","n":"其他通信设备","k":11}]},{"c":"801223","n":"通信服务","l3":[{"c":"852212","n":"电信运营商","k":3},{"c":"852213","n":"通信工程及服务","k":17},{"c":"852214","n":"通信应用增值服务","k":17}]}]},{"c":"801780","n":"银行","l2":[{"c":"801782","n":"国有大型银行Ⅱ","l3":[{"c":"857821","n":"国有大型银行Ⅲ","k":6}]},{"c":"801783","n":"股份制银行Ⅱ","l3":[{"c":"857831","n":"股份制银行Ⅲ","k":9}]},{"c":"801784","n":"城商行Ⅱ","l3":[{"c":"857841","n":"城商行Ⅲ","k":17}]},{"c":"801785","n":"农商行Ⅱ","l3":[{"c":"857851","n":"农商行Ⅲ","k":10}]}]},{"c":"801790","n":"非银金融","l2":[{"c":"801191","n":"多元金融","l3":[{"c":"851922","n":"金融控股","k":8},{"c":"851923","n":"期货","k":4},{"c":"851924","n":"信托","k":3},{"c":"851925","n":"租赁","k":3},{"c":"851926","n":"金融信息服务","k":2},{"c":"851927","n":"资产管理","k":4}]},{"c":"801193","n":"证券Ⅱ","l3":[{"c":"851931","n":"证券Ⅲ","k":50}]},{"c":"801194","n":"保险Ⅱ","l3":[{"c":"851941","n":"保险Ⅲ","k":5}]}]},{"c":"801880","n":"汽车","l2":[{"c":"801092","n":"汽车服务","l3":[{"c":"850232","n":"汽车经销商","k":4},{"c":"850233","n":"汽车综合服务","k":5}]},{"c":"801093","n":"汽车零部件","l3":[{"c":"850922","n":"车身附件及饰件","k":36},{"c":"850923","n":"底盘与发动机系统","k":93},{"c":"850924","n":"轮胎轮毂","k":21},{"c":"850925","n":"其他汽车零部件","k":55},{"c":"850926","n":"汽车电子电气系统","k":39}]},{"c":"801095","n":"乘用车","l3":[{"c":"850951","n":"电动乘用车","k":3},{"c":"850952","n":"综合乘用车","k":5}]},{"c":"801096","n":"商用车","l3":[{"c":"850912","n":"商用载货车","k":8},{"c":"850913","n":"商用载客车","k":5}]},{"c":"801881","n":"摩托车及其他","l3":[{"c":"858811","n":"其他运输设备","k":8},{"c":"858812","n":"摩托车","k":8}]}]},{"c":"801890","n":"机械设备","l2":[{"c":"801072","n":"通用设备","l3":[{"c":"850711","n":"机床工具","k":18},{"c":"850713","n":"磨具磨料","k":12},{"c":"850715","n":"制冷空调设备","k":18},{"c":"850716","n":"其他通用设备","k":46},{"c":"850731","n":"仪器仪表","k":55},{"c":"850751","n":"金属制品","k":71}]},{"c":"801074","n":"专用设备","l3":[{"c":"850721","n":"纺织服装设备","k":12},{"c":"850723","n":"农用机械","k":8},{"c":"850725","n":"能源及重型设备","k":57},{"c":"850726","n":"印刷包装机械","k":10},{"c":"850727","n":"其他专用设备","k":80},{"c":"850728","n":"楼宇设备","k":14}]},{"c":"801076","n":"轨交设备Ⅱ","l3":[{"c":"850936","n":"轨交设备Ⅲ","k":30}]},{"c":"801077","n":"工程机械","l3":[{"c":"850771","n":"工程机械整机","k":19},{"c":"850772","n":"工程机械器件","k":9}]},{"c":"801078","n":"自动化设备","l3":[{"c":"850781","n":"机器人","k":18},{"c":"850782","n":"工控设备","k":27},{"c":"850783","n":"激光设备","k":12},{"c":"850784","n":"其他自动化设备","k":25}]}]},{"c":"801950","n":"煤炭","l2":[{"c":"801951","n":"煤炭开采","l3":[{"c":"859511","n":"动力煤","k":15},{"c":"859512","n":"焦煤","k":11}]},{"c":"801952","n":"焦炭Ⅱ","l3":[{"c":"859521","n":"焦炭Ⅲ","k":7}]}]},{"c":"801960","n":"石油石化","l2":[{"c":"801961","n":"油气开采Ⅱ","l3":[{"c":"859611","n":"油气开采Ⅲ","k":4}]},{"c":"801962","n":"油服工程","l3":[{"c":"859621","n":"油田服务","k":7},{"c":"859622","n":"油气及炼化工程","k":6}]},{"c":"801963","n":"炼化及贸易","l3":[{"c":"859631","n":"炼油化工","k":10},{"c":"859632","n":"油品石化贸易","k":6},{"c":"859633","n":"其他石化","k":14}]}]},{"c":"801970","n":"环保","l2":[{"c":"801971","n":"环境治理","l3":[{"c":"859711","n":"大气治理","k":5},{"c":"859712","n":"水务及水治理","k":50},{"c":"859713","n":"固废治理","k":34},{"c":"859714","n":"综合环境治理","k":15}]},{"c":"801972","n":"环保设备Ⅱ","l3":[{"c":"859721","n":"环保设备Ⅲ","k":26}]}]},{"c":"801980","n":"美容护理","l2":[{"c":"801981","n":"个护用品","l3":[{"c":"859811","n":"生活用纸","k":8},{"c":"859812","n":"洗护用品","k":4}]},{"c":"801982","n":"化妆品","l3":[{"c":"859821","n":"化妆品制造及其他","k":5},{"c":"859822","n":"品牌化妆品","k":8}]},{"c":"801983","n":"医疗美容","l3":[{"c":"859831","n":"医美耗材","k":2},{"c":"859832","n":"医美服务","k":1}]}]}];
+
+/* 股票明细按需加载（data/stocks.json） */
+let STOCKS = null;          // { 三级代码: ["code|name|ex", ...] }
+let ALL_STOCKS = [];        // 扁平索引
+let ALL_L2 = [];
+
+function buildIndex(){
+  ALL_L2 = [];
+  TREE.forEach(l1 => l1.l2.forEach(l2 => {
+    ALL_L2.push({code:l2.c, name:l2.n, l1:l1.n, l1c:l1.c});
+    l2.l3.forEach(l3 => {
+      (STOCKS[l3.c] || []).forEach(str => {
+        const [code, name, ex] = str.split('|');
+        ALL_STOCKS.push({code, name, ex, l3:l3.n, l3c:l3.c, l2:l2.n, l2c:l2.c, l1:l1.n, l1c:l1.c});
+      });
+    });
+  }));
+}
+
+/* 懒加载：首次需要股票数据时拉取 */
+let _loading = null;
+function ensureStocks(){
+  if(STOCKS) return Promise.resolve();
+  if(_loading) return _loading;
+  _loading = fetch('data/stocks.json')
+    .then(r => { if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(j => { STOCKS = j; buildIndex(); })
+    .catch(e => { _loading = null; throw e; });
+  return _loading;
+}
+
+const TOTAL = {
+  l1: TREE.length,
+  l2: TREE.reduce((s,a)=>s+a.l2.length,0),
+  l3: TREE.reduce((s,a)=>s+a.l2.reduce((t,b)=>t+b.l3.length,0),0),
+  st: TREE.reduce((s,a)=>s+a.l2.reduce((t,b)=>t+b.l3.reduce((u,c)=>u+(c.k||0),0),0),0)
+};
+
+/* ═══════════ 模拟资金流 ═══════════ */
+function seedOf(str){let h=2166136261;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+/* 生成个股近 N 个交易日的资金流序列（确定性） */
+const _seriesCache = new Map();
+function genSeries(code, name, days){
+  const _ck = code + '|' + days;
+  const _hit = _seriesCache.get(_ck);
+  if(_hit) return _hit;
+  const r = mulberry(seedOf(code + name));
+  const big = /^(贵州茅台|宁德时代|中国平安|招商银行|五粮液|比亚迪|隆基绿能|美的集团|长江电力|紫金矿业|中国石油|工商银行|农业银行|中国银行|中远海控|京沪高铁|恒瑞医药|海康威视|立讯精密|万华化学|东方财富)/.test(name);
+  /* 单日净流入量级：大盘股约 0-8 亿，中小盘约 0-1.2 亿 */
+  const base = big ? (r()*1.6 + 0.5) : (r()*0.32 + 0.06);
+  const vol  = big ? 1.5 : (r()*1.1 + 0.5);          // 波动率
+  const drift = (r()-0.46) * 0.10;                   // 趋势
+  const out = [];
+  let cum = 0;
+  const start = new Date();
+  let i = 0, guard = 0;
+  while(out.length < days && guard < days*3){
+    guard++;
+    const d = new Date(start);
+    d.setDate(d.getDate() - (i++));
+    const wd = d.getDay();
+    if(wd===0 || wd===6) continue;                   // 跳过周末
+    const g = (r()+r()+r()+r()-2)/1.4;               // 近正态
+    const v = (g*vol + drift) * base;
+    cum += v;
+    out.push({d: d.toISOString().slice(0,10), v, cum});
+  }
+  const _res = out.reverse();
+  _seriesCache.set(_ck, _res);
+  return _res;
+}
+
+/* ═══════════ 工具 ═══════════ */
+const yi = v => (v>=0?'+':'') + v.toFixed(2) + '亿';
+const cls = v => v>0.005?'up':(v<-0.005?'down':'flat');
+const exName = e => e==='1'?'上交所':'深交所';
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function hl(text, q){
+  if(!q) return esc(text);
+  const i = text.toLowerCase().indexOf(q.toLowerCase());
+  if(i<0) return esc(text);
+  return esc(text.slice(0,i)) + '<mark>' + esc(text.slice(i,i+q.length)) + '</mark>' + esc(text.slice(i+q.length));
+}
+
+/* ═══════════ 树渲染 ═══════════ */
+let exFilter = 'all', term = '';
+
+function matchCount(){
+  if(!term && exFilter==='all') return null;
+  const q = term.toLowerCase();
+  const hit = new Set();
+  ALL_STOCKS.forEach(s => {
+    if(exFilter!=='all' && s.ex!==exFilter) return;
+    if(q && !(s.name.toLowerCase().includes(q)||s.code.includes(q))) return;
+    hit.add(s.code);
+  });
+  return hit;
+}
+
+function renderTree(){
+  const box = document.getElementById('tree');
+  const q = term.trim();
+  const hits = matchCount();
+
+  const html = TREE.map(l1 => {
+    const l2html = l1.l2.map(l2 => {
+      const l3html = l2.l3.map(l3 => {
+        let list = (STOCKS[l3.c] || []).map(str => {
+          const [code, name, ex] = str.split('|');
+          return {code, name, ex};
+        });
+        if(exFilter!=='all') list = list.filter(s => s.ex===exFilter);
+        if(hits) list = list.filter(s => hits.has(s.code));
+        if(!list.length) return '';
+        const stocks = list.map(s =>
+          `<button class="stock" data-code="${s.code}" data-name="${esc(s.name)}">
+            <span class="stock-code">${s.code}</span>
+            <span class="stock-name">${q?hl(s.name,q):esc(s.name)}</span>
+            <span class="ex">${s.ex==='1'?'SH':'SZ'}</span>
+          </button>`).join('');
+        return `<div class="l3" data-open="${q||hits?'1':'0'}">
+          <button class="l3-head" data-toggle>
+            <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+            <span class="l3-name">${q?hl(l3.n,q):esc(l3.n)}</span>
+            <span class="tag-l3">三级</span>
+            <span class="flow-btn" data-flow="l3" data-code="${l3.c}" data-name="${esc(l3.n)}" title="查看行业资金流">资金流</span>
+            <span class="count">${list.length} 只</span>
+          </button>
+          <div class="l3-body"><div class="stocks">${stocks}</div></div>
+        </div>`;
+      }).join('');
+
+      if(!l3html) return '';
+      const l2cnt = l2.l3.reduce((s,l3)=>{
+        const _a = STOCKS[l3.c] || [];
+        let n = _a.length;
+        if(exFilter!=='all') n = _a.filter(x=>x.split('|')[2]===exFilter).length;
+        return s+n;
+      },0);
+      const shownCnt = hits ? 
+        l2.l3.reduce((s,l3)=>s+(STOCKS[l3.c]||[]).filter(x=>hits.has(x.split('|')[0])).length,0) : l2cnt;
+
+      return `<div class="l2" data-open="${q||hits?'1':'0'}">
+        <button class="l2-head" data-toggle>
+          <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+          <span class="l2-name">${q?hl(l2.n,q):esc(l2.n)}</span>
+          <span class="l2-code">${l2.c}</span>
+          <span class="flow-btn" data-flow="l2" data-code="${l2.c}" data-name="${esc(l2.n)}" title="查看行业资金流">资金流</span>
+          <span class="count">${shownCnt} 只</span>
+        </button>
+        <div class="l2-body">${l3html}</div>
+      </div>`;
+    }).join('');
+
+    if(!l2html) return '';
+    const cnt = hits ? hits.size : (
+      exFilter==='all' ? l1.l2.reduce((s,l2)=>s+l2.l3.reduce((t,l3)=>t+(STOCKS[l3.c]||[]).length,0),0)
+        : l1.l2.reduce((s,l2)=>s+l2.l3.reduce((t,l3)=>t+(STOCKS[l3.c]||[]).filter(x=>x.split('|')[2]===exFilter).length,0),0)
+    );
+    return `<div class="l1" data-open="${q||hits?'1':'0'}">
+      <button class="l1-head" data-toggle>
+        <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+        <span class="l1-name">${q?hl(l1.n,q):esc(l1.n)}</span>
+        <span class="l1-code">${l1.c}</span>
+        <span class="flow-btn" data-flow="l1" data-code="${l1.c}" data-name="${esc(l1.n)}" title="查看行业资金流">资金流</span>
+        <span class="count">${cnt} 只</span>
+      </button>
+      <div class="l1-body">${l2html}</div>
+    </div>`;
+  }).join('');
+
+  box.innerHTML = html || '<div class="empty">没有匹配的股票或行业</div>';
+  document.getElementById('statLine').innerHTML =
+    hits ? `匹配 <b>${hits.size}</b> 只股票`
+         : `<b>${TOTAL.l1}</b> 一级 · <b>${TOTAL.l2}</b> 二级 · <b>${TOTAL.l3}</b> 三级 · <b>${TOTAL.st}</b> 只股票`;
+}
+
+/* ═══════════ 图表 ═══════════ */
+let cur = {code:null, name:null, days:120};
+
+function chartHtml(data, days){
+  const W = Math.max(document.getElementById('dBody').clientWidth - 60, 320);
+  const H = 250, PL = 52, PR = 14, PT = 12, PB = 26;
+  const iw = W - PL - PR, ih = H - PT - PB;
+  const maxAbs = Math.max(...data.map(d=>Math.abs(d.cum)), 1);
+  const maxV = Math.max(...data.map(d=>Math.abs(d.v)), 0.5);
+
+  const x = i => PL + (i/(data.length-1||1))*iw;
+  const yCum = v => PT + ih/2 - (v/maxAbs)*(ih/2)*0.92;
+  const bw = Math.max(iw/data.length*0.62, 1.2);
+
+  // 柱（每日净流入）
+  const bars = data.map((d,i)=>{
+    const h = (Math.abs(d.v)/maxV)*(ih/2)*0.88;
+    const y = d.v>=0 ? PT+ih/2-h : PT+ih/2;
+    const c = d.v>=0 ? 'var(--up)' : 'var(--down)';
+    return `<rect x="${(x(i)-bw/2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(h,0.6).toFixed(1)}" fill="${c}" opacity=".42"/>`;
+  }).join('');
+
+  // 累计折线
+  const line = data.map((d,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${yCum(d.cum).toFixed(1)}`).join(' ');
+  const area = `${line} L${x(data.length-1).toFixed(1)},${(PT+ih/2).toFixed(1)} L${x(0).toFixed(1)},${(PT+ih/2).toFixed(1)} Z`;
+
+  // Y 轴刻度
+  const ticks = [-1,-0.5,0,0.5,1].map(f=>{
+    const v = maxAbs*f, y = yCum(v);
+    return `<text class="axis" x="${PL-8}" y="${(y+3.5).toFixed(1)}" text-anchor="end">${(v>=0?'+':'')+v.toFixed(1)}</text>
+            <line class="grid-line" x1="${PL}" y1="${y.toFixed(1)}" x2="${W-PR}" y2="${y.toFixed(1)}"/>`;
+  }).join('');
+
+  // X 轴日期
+  const xl = [0, Math.floor(data.length/2), data.length-1].map(i=>{
+    const d = data[i]; if(!d) return '';
+    return `<text class="axis" x="${x(i).toFixed(1)}" y="${H-8}" text-anchor="middle">${d.d.slice(5)}</text>`;
+  }).join('');
+
+  return `<div class="chart-wrap">
+    <div class="chart-title">
+      <span>近 ${days} 个交易日资金流</span>
+      <span class="chart-legend">
+        <span class="lg"><span class="sw" style="background:var(--up)"></span>净流入</span>
+        <span class="lg"><span class="sw" style="background:var(--down)"></span>净流出</span>
+        <span class="lg"><span class="sw" style="background:#8b93e8"></span>累计</span>
+      </span>
+    </div>
+    <svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" id="svg">
+      ${ticks}
+      ${bars}
+      <path d="${area}" fill="rgba(139,147,232,.09)"/>
+      <path d="${line}" fill="none" stroke="#8b93e8" stroke-width="1.8" stroke-linejoin="round"/>
+      <line x1="${PL}" y1="${(PT+ih/2).toFixed(1)}" x2="${W-PR}" y2="${(PT+ih/2).toFixed(1)}" stroke="var(--border-strong)"/>
+      ${xl}
+      <g id="hitArea">${data.map((d,i)=>`<rect x="${(x(i)-iw/data.length/2).toFixed(1)}" y="${PT}" width="${(iw/data.length).toFixed(1)}" height="${ih}" fill="transparent" data-i="${i}"/>`).join('')}</g>
+    </svg>
+  </div>`;
+}
+
+/* ═══════════ 行业资金流 ═══════════ */
+/* 取某行业下所有成分股，汇总其模拟资金流 */
+function stocksOf(level, code){
+  const out = [];
+  TREE.forEach(l1 => l1.l2.forEach(l2 => {
+    l2.l3.forEach(l3 => {
+      if(level==='l1' && l1.c!==code) return;
+      if(level==='l2' && l2.c!==code) return;
+      if(level==='l3' && l3.c!==code) return;
+      (STOCKS[l3.c] || []).forEach(str => {
+        const [sc, sn, ex] = str.split('|');
+        out.push({code:sc, name:sn, ex, l1:l1.n, l1c:l1.c, l2:l2.n, l2c:l2.c, l3:l3.n, l3c:l3.c});
+      });
+    });
+  }));
+  return out;
+}
+
+/* 汇总多只股票的日序列 → 行业日序列 */
+function aggregate(comp, days){
+  if(!comp.length) return [];
+  const map = new Map();
+  comp.forEach(s => {
+    genSeries(s.code, s.name, days).forEach(d => {
+      if(!map.has(d.d)) map.set(d.d, 0);
+      map.set(d.d, map.get(d.d) + d.v);
+    });
+  });
+  const arr = [...map.entries()].map(([d,v])=>({d,v,cum:0}));
+  arr.sort((a,b)=>a.d<b.d?-1:1);
+  let c = 0;
+  arr.forEach(x => { c += x.v; x.cum = c; });
+  return arr;
+}
+
+let curIndustry = null;
+
+function openIndustry(level, code, name){
+  const comp = stocksOf(level, code);
+  if(!comp.length) return;
+  curIndustry = {level, code, name, comp};
+  const lvName = level==='l1' ? '一级行业' : (level==='l2' ? '二级行业' : '三级行业');
+  const parent = comp[0];
+
+  document.getElementById('dTitle').textContent = name;
+  document.getElementById('dMeta').innerHTML =
+    `<span class="mode-badge">${lvName}</span>
+     <span class="num">${code}</span>
+     <span>成分股 ${comp.length} 只</span>
+     <span style="color:var(--border-strong)">|</span>
+     ` + (level==='l1' ? `<span>${parent.l1}</span>`
+        : level==='l2' ? `<span>${parent.l1}</span>`
+        : `<span>${parent.l1}</span><span style="color:var(--text-dim)">›</span><span>${parent.l2}</span>`);
+
+  renderIndustryBody();
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('scrim').classList.add('open');
+  document.getElementById('dClose').focus();
+}
+
+function renderIndustryBody(){
+  const {level, code, name, comp} = curIndustry;
+  const days = cur.days;
+  const series = aggregate(comp, days);
+  const net = series.reduce((s,d)=>s+d.v,0);
+  const inflowDays = series.filter(d=>d.v>0).length;
+  const best = series.reduce((a,b)=>Math.abs(b.v)>Math.abs(a.v)?b:a);
+  const maxCum = Math.max(...series.map(d=>d.cum));
+  const minCum = Math.min(...series.map(d=>d.cum));
+
+  // 成分股各自区间净流入排行
+  const perStock = comp.map(s=>{
+    const sd = genSeries(s.code, s.name, days);
+    return {...s, net: sd.reduce((a,d)=>a+d.v,0)};
+  }).sort((a,b)=>b.net-a.net);
+
+  const topN = perStock.slice(0, 40);
+  const compHtml = topN.map((s,i)=>
+    `<button class="comp-item" data-code="${s.code}" data-name="${esc(s.name)}">
+      <span class="comp-rank">${i+1}</span>
+      <span class="comp-code">${s.code}</span>
+      <span class="comp-name">${esc(s.name)}</span>
+      <span class="comp-val ${cls(s.net)}">${yi(s.net)}</span>
+    </button>`).join('');
+
+  const ranges = [[20,'近1月'],[60,'近3月'],[120,'近6月'],[242,'近1年']];
+  const rangeBtns = ranges.map(([n,label])=>
+    `<button data-days="${n}" aria-pressed="${days===n}">${label}</button>`).join('');
+
+  document.getElementById('dBody').innerHTML = `
+    <div class="range-bar">
+      <span class="lbl">时间范围</span>
+      <div class="seg" id="rangeSegI">${rangeBtns}</div>
+      <span class="lbl" style="margin-left:auto">${series.length} 个交易日</span>
+    </div>
+
+    <div class="sum">
+      <div class="sum-c"><div class="sum-l">区间净流入合计</div><div class="sum-v ${cls(net)}">${yi(net)}</div></div>
+      <div class="sum-c"><div class="sum-l">净流入天数</div><div class="sum-v">${inflowDays} <span style="font-size:13px;color:var(--text-dim)">/ ${series.length} 天</span></div></div>
+      <div class="sum-c"><div class="sum-l">单日最大净流入</div><div class="sum-v ${cls(best.v)}">${yi(best.v)}</div></div>
+      <div class="sum-c"><div class="sum-l">累计峰值 / 谷值</div><div class="sum-v" style="font-size:15px"><span class="up">${yi(maxCum)}</span> <span style="color:var(--text-dim)">/</span> <span class="down">${yi(minCum)}</span></div></div>
+    </div>
+
+    ${chartHtml(series, days)}
+
+    <div class="sec-t">成分股区间净流入排行（前 ${topN.length} / ${comp.length} 只）</div>
+    <div class="comp-list">${compHtml}</div>
+  `;
+  bindChart(series);
+}
+/* ═══════════ 抽屉 ═══════════ */
+function openStock(code, name){
+  curIndustry = null;
+  const s = ALL_STOCKS.find(x=>x.code===code);
+  if(!s) return;
+  cur = {code, name, days:cur.days};
+
+  document.getElementById('dTitle').textContent = name;
+  document.getElementById('dMeta').innerHTML =
+    `<span class="num">${code}</span>
+     <span>${exName(s.ex)}</span>
+     <span style="color:var(--border-strong)">|</span>
+     <span>${s.l1}</span><span style="color:var(--text-dim)">›</span>
+     <span>${s.l2}</span><span style="color:var(--text-dim)">›</span>
+     <span>${s.l3}</span>`;
+
+  renderBody();
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('scrim').classList.add('open');
+  document.getElementById('dClose').focus();
+}
+
+function renderBody(){
+  const s = ALL_STOCKS.find(x=>x.code===cur.code) || {l1:'',l2:'',l3:'',l1c:'',l2c:'',l3c:''};
+  const data = genSeries(cur.code, cur.name, cur.days);
+  const net = data.reduce((s,d)=>s+d.v,0);
+  const inflowDays = data.filter(d=>d.v>0).length;
+  const best = data.reduce((a,b)=>Math.abs(b.v)>Math.abs(a.v)?b:a);
+  const maxCum = Math.max(...data.map(d=>d.cum));
+  const minCum = Math.min(...data.map(d=>d.cum));
+
+  const ranges = [[20,'近1月'],[60,'近3月'],[120,'近6月'],[242,'近1年']];
+  const rangeBtns = ranges.map(([n,label])=>
+    `<button data-days="${n}" aria-pressed="${cur.days===n}">${label}</button>`).join('');
+
+  document.getElementById('dBody').innerHTML = `
+    <div class="range-bar">
+      <span class="lbl">时间范围</span>
+      <div class="seg" id="rangeSeg">${rangeBtns}</div>
+      <span class="lbl" style="margin-left:auto">${data.length} 个交易日</span>
+    </div>
+
+    <div class="sum">
+      <div class="sum-c"><div class="sum-l">区间净流入合计</div><div class="sum-v ${cls(net)}">${yi(net)}</div></div>
+      <div class="sum-c"><div class="sum-l">净流入天数</div><div class="sum-v">${inflowDays} <span style="font-size:13px;color:var(--text-dim)">/ ${data.length} 天</span></div></div>
+      <div class="sum-c"><div class="sum-l">单日最大净流入</div><div class="sum-v ${cls(best.v)}">${yi(best.v)}</div></div>
+      <div class="sum-c"><div class="sum-l">累计峰值 / 谷值</div><div class="sum-v" style="font-size:15px"><span class="up">${yi(maxCum)}</span> <span style="color:var(--text-dim)">/</span> <span class="down">${yi(minCum)}</span></div></div>
+    </div>
+
+    ${chartHtml(data, cur.days)}
+
+    <div class="tree-path">
+      <div class="tp-t">所属行业层级</div>
+      <div class="tp-row"><span class="tp-k">一级</span><span class="tp-v">${s.l1} <em>${s.l1c}</em></span></div>
+      <div class="tp-row"><span class="tp-k">二级</span><span class="tp-v">${s.l2} <em>${s.l2c}</em></span></div>
+      <div class="tp-row"><span class="tp-k">三级</span><span class="tp-v">${s.l3} <em>${s.l3c}</em></span></div>
+    </div>
+  `;
+
+  bindChart();
+}
+
+/* ═══════════ 交互 ═══════════ */
+function bindChart(series){
+  const svg = document.getElementById('svg');
+  const tip = document.getElementById('tip');
+  if(!svg) return;
+  let data = series || [];
+  svg.querySelectorAll('#hitArea rect').forEach(r=>{
+    r.addEventListener('mousemove', e=>{
+      const i = +r.dataset.i, d = data[i];
+      tip.innerHTML = `<div class="tip-date">${d.d}</div>
+        <div class="tip-row"><span style="color:var(--text-dim)">当日</span><span class="${cls(d.v)}">${yi(d.v)}</span></div>
+        <div class="tip-row"><span style="color:var(--text-dim)">累计</span><span class="${cls(d.cum)}">${yi(d.cum)}</span></div>`;
+      tip.classList.add('on');
+      const tw = tip.offsetWidth, th = tip.offsetHeight;
+      tip.style.left = Math.min(e.clientX+14, innerWidth-tw-8) + 'px';
+      tip.style.top  = Math.max(e.clientY-th-12, 8) + 'px';
+    });
+    r.addEventListener('mouseleave', ()=>tip.classList.remove('on'));
+  });
+}
+function closeDrawer(){
+  curIndustry = null;
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('scrim').classList.remove('open');
+  document.getElementById('tip').classList.remove('on');
+}
+
+/* 树事件委托 */
+document.getElementById('tree').addEventListener('click', e=>{
+  const flow = e.target.closest('.flow-btn');
+  if(flow){
+    e.stopPropagation();
+    openIndustry(flow.dataset.flow, flow.dataset.code, flow.dataset.name);
+    return;
+  }
+  const stock = e.target.closest('.stock');
+  if(stock){ openStock(stock.dataset.code, stock.dataset.name); return; }
+  const head = e.target.closest('[data-toggle]');
+  if(head){
+    const node = head.parentElement;
+    node.dataset.open = node.dataset.open==='1' ? '0' : '1';
+  }
+});
+
+/* 时间范围 */
+document.getElementById('dBody').addEventListener('click', e=>{
+  const seg = e.target.closest('#rangeSeg button, #rangeSegI button');
+  if(seg){
+    cur.days = +seg.dataset.days;
+    if(curIndustry) renderIndustryBody(); else renderBody();
+    return;
+  }
+  const ci = e.target.closest('.comp-item');
+  if(ci){ openStock(ci.dataset.code, ci.dataset.name); return; }
+});
+
+document.getElementById('dClose').addEventListener('click', closeDrawer);
+document.getElementById('scrim').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeDrawer(); });
+
+/* 搜索 */
+let tq;
+document.getElementById('q').addEventListener('input', e=>{
+  clearTimeout(tq);
+  tq = setTimeout(()=>{ term = e.target.value; if(STOCKS) renderTree(); }, 140);
+});
+
+/* 交易所筛选 */
+document.getElementById('exSeg').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  exFilter = b.dataset.ex;
+  [...e.currentTarget.children].forEach(x=>x.setAttribute('aria-pressed', String(x===b)));
+  if(STOCKS) renderTree();
+});
+
+/* 展收 */
+document.getElementById('expandAll').addEventListener('click', ()=>{
+  document.querySelectorAll('.l1,.l2,.l3').forEach(n=>n.dataset.open='1');
+});
+document.getElementById('collapseAll').addEventListener('click', ()=>{
+  document.querySelectorAll('.l1,.l2,.l3').forEach(n=>n.dataset.open='0');
+});
+
+/* ═══════════ 启动 ═══════════ */
+(function boot(){
+  const tree = document.getElementById('tree');
+  tree.innerHTML = '<div class="empty">正在加载行业数据…</div>';
+  document.getElementById('statLine').textContent = '加载中…';
+
+  ensureStocks().then(()=>{
+    renderTree();
+  }).catch(err=>{
+    tree.innerHTML = '<div class="empty">' +
+      '数据加载失败：' + err.message + '<br><br>' +
+      '<span style="font-size:12px">请确认 <code>data/stocks.json</code> 与本文件在同一目录下。<br>' +
+      '若是直接双击打开，浏览器可能因安全策略拦截本地 fetch —— 请用本地服务器访问，例如在目录下执行：<br>' +
+      '<code style="color:#a9b0e0">python -m http.server 8000</code></span></div>';
+  });
+})();
+</script>
+</body>
+</html>

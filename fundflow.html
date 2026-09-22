@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>申万二级行业资金流 · 实时看板</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0b0d; --bg-elev:#101114; --surface:#16181c; --surface-2:#1c1f24;
+  --border:#23262c; --border-strong:#2f333a;
+  --text:#e8eaed; --text-muted:#8b9199; --text-dim:#5f666e;
+  --up:#ff4d4f; --up-dim:rgba(255,77,79,.14); --up-line:rgba(255,77,79,.5);
+  --down:#00c48c; --down-dim:rgba(0,196,140,.14); --down-line:rgba(0,196,140,.5);
+  --flat:#4a4f57;
+  --accent:#5e6ad2;
+  --font:'Inter','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+  --mono:'JetBrains Mono',Consolas,monospace;
+  --r-sm:6px; --r:10px; --r-lg:14px;
+  --gutter:20px; --maxw:1560px;
+  --ease:cubic-bezier(.22,.61,.36,1);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+  font-size:14px;line-height:1.5;letter-spacing:-.006em;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+::selection{background:var(--accent);color:#fff}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 var(--gutter)}
+
+/* ── 顶栏 ── */
+header{
+  position:sticky;top:0;z-index:60;
+  background:rgba(10,11,13,.86);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--border);
+}
+.bar{display:flex;align-items:center;gap:18px;height:56px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14.5px;white-space:nowrap;flex:none}
+.brand-mark{
+  width:24px;height:24px;border-radius:7px;background:var(--accent);
+  display:grid;place-items:center;font-size:11px;font-weight:700;color:#fff;flex:none;
+}
+.bar-spacer{flex:1}
+.market-strip{display:flex;gap:16px;font-size:12.5px;color:var(--text-muted);white-space:nowrap}
+.market-strip b{font-weight:500;font-family:var(--mono)}
+.live{
+  display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;
+  border:1px solid var(--border-strong);border-radius:100px;
+  font-size:11.5px;color:var(--text-muted);background:var(--bg-elev);flex:none;
+}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--down);box-shadow:0 0 0 3px var(--down-dim);animation:pulse 2s var(--ease) infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ── 控制条 ── */
+.controls{
+  position:sticky;top:56px;z-index:50;
+  background:rgba(10,11,13,.9);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--border);padding:11px 0;
+}
+.ctrl-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:2px;gap:2px}
+.seg button{
+  padding:6px 13px;border-radius:4px;font-size:12.5px;color:var(--text-muted);
+  transition:background-color .16s var(--ease),color .16s var(--ease);white-space:nowrap;
+}
+.seg button:hover{color:var(--text)}
+.seg button[aria-pressed="true"]{background:var(--surface-2);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.search{
+  display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
+  transition:border-color .16s var(--ease);min-width:190px;flex:1;max-width:280px;
+}
+.search:focus-within{border-color:var(--border-strong)}
+.search svg{flex:none;color:var(--text-dim)}
+.search input{
+  background:none;border:none;outline:none;color:var(--text);
+  font-size:13px;font-family:inherit;width:100%;padding:0;
+}
+.search input::placeholder{color:var(--text-dim)}
+.hint{font-size:12px;color:var(--text-dim);margin-left:auto;white-space:nowrap}
+
+/* ── 概览卡 ── */
+.overview{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+  background:var(--border);border:1px solid var(--border);border-radius:var(--r);
+  overflow:hidden;margin:18px 0;
+}
+.ov{background:var(--bg-elev);padding:15px 17px}
+.ov-label{font-size:11.5px;color:var(--text-dim);margin-bottom:7px;letter-spacing:.02em}
+.ov-val{font-family:var(--mono);font-size:21px;font-weight:600;letter-spacing:-.03em}
+.ov-sub{font-size:11.5px;color:var(--text-dim);margin-top:5px}
+.up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--text-muted)}
+
+/* ── 热力图 ── */
+.panel{
+  background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--r-lg);
+  overflow:hidden;margin-bottom:18px;
+}
+.panel-head{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:14px 17px;border-bottom:1px solid var(--border);
+}
+.panel-title{font-size:13.5px;font-weight:600;letter-spacing:-.01em}
+.panel-sub{font-size:11.5px;color:var(--text-dim);margin-top:3px;font-weight:400}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:var(--text-dim);white-space:nowrap}
+.legend-bar{
+  width:104px;height:7px;border-radius:100px;
+  background:linear-gradient(90deg,var(--down) 0%,#2a2e34 50%,var(--up) 100%);
+}
+#treemap{position:relative;padding:5px;height:calc(100vh - 330px);min-height:560px;max-height:900px}
+
+.tile{
+  position:absolute;border-radius:var(--r-sm);overflow:hidden;cursor:pointer;
+  border:1px solid transparent;padding:9px 10px;
+  transition:transform .16s var(--ease),border-color .16s var(--ease),box-shadow .16s var(--ease);
+  display:flex;flex-direction:column;justify-content:space-between;
+}
+.tile:hover{transform:translateY(-1px);border-color:rgba(255,255,255,.28);box-shadow:0 6px 20px rgba(0,0,0,.45);z-index:5}
+.tile-name{
+  font-size:12.5px;font-weight:600;line-height:1.28;letter-spacing:-.01em;
+  overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+}
+.tile-l1{font-size:10px;opacity:.62;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile-flow{font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:-.03em;line-height:1.15}
+.tile-pct{font-family:var(--mono);font-size:10.5px;opacity:.72;margin-top:2px}
+.tile[data-s="s"]{padding:7px 8px}
+.tile[data-s="s"] .tile-name{font-size:11px;-webkit-line-clamp:1}
+.tile[data-s="s"] .tile-flow{font-size:11.5px}
+.tile[data-s="s"] .tile-l1,.tile[data-s="s"] .tile-pct{display:none}
+.tile[data-s="xs"]{padding:5px 6px;justify-content:center}
+.tile[data-s="xs"] .tile-name{font-size:9.5px;-webkit-line-clamp:1}
+.tile[data-s="xs"] .tile-flow,.tile[data-s="xs"] .tile-l1,.tile[data-s="xs"] .tile-pct{display:none}
+
+/* ── 排行表 ── */
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:760px}
+thead th{
+  position:sticky;top:0;background:var(--bg-elev);
+  padding:10px 14px;text-align:right;font-weight:500;font-size:11.5px;
+  color:var(--text-dim);letter-spacing:.03em;border-bottom:1px solid var(--border);white-space:nowrap;
+}
+thead th:first-child,thead th:nth-child(2){text-align:left}
+tbody td{padding:10px 14px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
+tbody td:first-child,tbody td:nth-child(2){text-align:left}
+tbody tr{transition:background-color .14s var(--ease)}
+tbody tr:hover{background:var(--surface)}
+tbody tr:last-child td{border-bottom:none}
+.rank{font-family:var(--mono);color:var(--text-dim);font-size:12px;width:46px}
+.ind-name{font-weight:500}
+.ind-code{font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-left:7px}
+.l1-tag{
+  display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;
+  background:var(--surface);border:1px solid var(--border);color:var(--text-muted);
+}
+.bar-cell{width:130px}
+.bar-track{height:5px;border-radius:100px;background:var(--surface-2);overflow:hidden;position:relative}
+.bar-fill{height:100%;border-radius:100px;transition:width .35s var(--ease)}
+
+/* ── 抽屉 ── */
+.scrim{
+  position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:100;
+  opacity:0;pointer-events:none;transition:opacity .24s var(--ease);
+  backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+}
+.scrim.open{opacity:1;pointer-events:auto}
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;width:min(430px,100%);
+  background:var(--bg-elev);border-left:1px solid var(--border);z-index:101;
+  transform:translateX(100%);transition:transform .3s var(--ease);
+  display:flex;flex-direction:column;
+}
+.drawer.open{transform:none}
+.drawer-head{padding:19px 22px;border-bottom:1px solid var(--border);flex:none}
+.drawer-title{font-size:19px;font-weight:600;letter-spacing:-.025em;margin-bottom:5px}
+.drawer-meta{font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.drawer-body{padding:20px 22px;overflow-y:auto;flex:1}
+.drawer-close{
+  position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:var(--r-sm);
+  display:grid;place-items:center;color:var(--text-muted);border:1px solid transparent;
+  transition:background-color .16s var(--ease),color .16s var(--ease);
+}
+.drawer-close:hover{background:var(--surface);color:var(--text)}
+.kv{display:flex;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid var(--border);font-size:13px}
+.kv:last-of-type{border-bottom:none}
+.kv .k{color:var(--text-dim)}
+.kv .v{font-family:var(--mono);font-weight:500}
+.sec-t{font-size:11.5px;color:var(--text-dim);letter-spacing:.05em;text-transform:uppercase;margin:22px 0 11px;font-weight:500}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{
+  padding:5px 11px;border:1px solid var(--border);border-radius:100px;
+  font-size:12.5px;background:var(--surface);color:var(--text-muted);
+}
+.flow-big{font-family:var(--mono);font-size:29px;font-weight:600;letter-spacing:-.035em;margin-bottom:3px}
+.empty{padding:60px 20px;text-align:center;color:var(--text-dim);font-size:13px}
+
+footer{
+  border-top:1px solid var(--border);margin-top:26px;padding:22px 0;
+  font-size:12px;color:var(--text-dim);
+}
+.foot{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.warn{
+  display:flex;align-items:flex-start;gap:9px;padding:12px 15px;margin-bottom:18px;
+  background:rgba(94,106,210,.07);border:1px solid rgba(94,106,210,.22);
+  border-radius:var(--r);font-size:12.5px;color:#a9b0e0;line-height:1.6;
+}
+.warn b{color:#c3c8f0;font-weight:600}
+
+@media (max-width:1080px){
+  .overview{grid-template-columns:repeat(2,1fr)}
+  .hint{display:none}
+}
+@media (max-width:760px){
+  :root{--gutter:14px}
+  .market-strip{display:none}
+  .controls{top:56px}
+  .overview{grid-template-columns:repeat(2,1fr);margin:14px 0}
+  .ov{padding:12px 13px}
+  .ov-val{font-size:17px}
+  #treemap{min-height:340px}
+  .search{max-width:none;flex:1 1 100%}
+  .bar{height:52px}
+  .controls{top:52px}
+  .drawer{width:100%}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap bar">
+    <div class="brand">
+      <span class="brand-mark">申</span>
+      <span>申万二级行业资金流</span>
+    </div>
+    <div class="bar-spacer"></div>
+    <div class="market-strip">
+      <span>沪指 <b class="up" id="mSh">+0.62%</b></span>
+      <span>深成 <b class="down" id="mSz">-0.18%</b></span>
+      <span>两市成交 <b id="mAmt">1.42万亿</b></span>
+    </div>
+    <div class="live"><span class="live-dot"></span><span id="liveText">模拟数据</span></div>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="wrap ctrl-row">
+    <div class="seg" id="periodSeg" role="group" aria-label="统计周期">
+      <button data-p="1" aria-pressed="true">今日</button>
+      <button data-p="5" aria-pressed="false">5日</button>
+      <button data-p="10" aria-pressed="false">10日</button>
+    </div>
+    <div class="seg" id="viewSeg" role="group" aria-label="视图切换">
+      <button data-v="map" aria-pressed="true">热力图</button>
+      <button data-v="table" aria-pressed="false">排行表</button>
+    </div>
+    <label class="search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+      </svg>
+      <input type="search" id="q" placeholder="搜索行业 / 代码 / 龙头股" autocomplete="off">
+    </label>
+    <span class="hint" id="hint"></span>
+  </div>
+</div>
+
+<main class="wrap">
+  <div class="warn">
+    <span>⚠️</span>
+    <span><b>界面演示版</b>　行业结构与成分股来自真实申万分类（131 个二级行业 / 5218 只股票），资金流数值为<b>模拟生成</b>，用于确认设计方向。接入真实数据后即可上线。</span>
+  </div>
+
+  <div class="overview">
+    <div class="ov">
+      <div class="ov-label">净流入行业</div>
+      <div class="ov-val up" id="ovIn">—</div>
+      <div class="ov-sub" id="ovInSub">占比 —</div>
+    </div>
+    <div class="ov">
+      <div class="ov-label">净流出行业</div>
+      <div class="ov-val down" id="ovOut">—</div>
+      <div class="ov-sub" id="ovOutSub">占比 —</div>
+    </div>
+    <div class="ov">
+      <div class="ov-label">主力净流入合计</div>
+      <div class="ov-val" id="ovNet">—</div>
+      <div class="ov-sub" id="ovNetSub">全市场口径</div>
+    </div>
+    <div class="ov">
+      <div class="ov-label">最强 / 最弱</div>
+      <div class="ov-val" id="ovExtreme" style="font-size:15px">—</div>
+      <div class="ov-sub" id="ovExtremeSub">—</div>
+    </div>
+  </div>
+
+  <section class="panel" id="mapPanel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">行业资金流热力图</div>
+        <div class="panel-sub">方块面积 = 行业成交额　·　颜色深浅 = 资金净流入强度　·　点击查看详情</div>
+      </div>
+      <div class="legend">
+        <span>流出</span><span class="legend-bar"></span><span>流入</span>
+      </div>
+    </div>
+    <div id="treemap"></div>
+  </section>
+
+  <section class="panel" id="tablePanel" hidden>
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">行业资金流排行</div>
+        <div class="panel-sub" id="tableSub">按主力净流入排序</div>
+      </div>
+      <div class="legend"><span id="rowCount"></span></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>行业</th><th>一级行业</th><th>成分股</th>
+            <th>主力净流入</th><th>净流入占比</th><th>行业涨跌</th><th>强度</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>数据分类：申万行业分类（2026-09-21 版）　·　界面为演示版本，数值非真实行情</span>
+    <span>不构成任何投资建议</span>
+  </div>
+</footer>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+  <button class="drawer-close" id="dClose" aria-label="关闭">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+      <path d="M5 5l14 14M19 5L5 19"/>
+    </svg>
+  </button>
+  <div class="drawer-head">
+    <div class="drawer-title" id="dTitle">—</div>
+    <div class="drawer-meta" id="dMeta"></div>
+  </div>
+  <div class="drawer-body" id="dBody"></div>
+</aside>
+<script>
+/* ══════ 数据 ══════ */
+const SW = [{"code":"801011","name":"林业Ⅱ","l1":"农林牧渔","n":4,"top":["平潭发展","永安林业","福建金森","*ST景谷"]},{"code":"801012","name":"农产品加工","l1":"农林牧渔","n":23,"top":["深粮控股","京粮控股","*ST广糖","中粮科技"]},{"code":"801014","name":"饲料","l1":"农林牧渔","n":18,"top":["正虹科技","新希望","粤海饲料","播恩集团"]},{"code":"801015","name":"渔业","l1":"农林牧渔","n":6,"top":["中水渔业","獐子岛","国联水产","开创国际"]},{"code":"801016","name":"种植业","l1":"农林牧渔","n":20,"top":["国投丰乐","隆平高科","登海种业","诺普信"]},{"code":"801017","name":"养殖业","l1":"农林牧渔","n":22,"top":["京基智农","罗牛山","东瑞股份","天邦食品"]},{"code":"801018","name":"动物保健Ⅱ","l1":"农林牧渔","n":9,"top":["金河生物","绿康生化","瑞普生物","回盛生物"]},{"code":"801019","name":"农业综合Ⅱ","l1":"农林牧渔","n":2,"top":["辉隆股份","大禹节水"]},{"code":"801032","name":"化学纤维","l1":"基础化工","n":26,"top":["吉林化纤","ST海龙","恒申新材","华西股份"]},{"code":"801033","name":"化学原料","l1":"基础化工","n":57,"top":["新金路","金浦钛业","英力特","博源化工"]},{"code":"801034","name":"化学制品","l1":"基础化工","n":172,"top":["渝三峡A","中广核技","丽臣实业","信凯科技"]},{"code":"801036","name":"塑料","l1":"基础化工","n":72,"top":["国风新材","沃顿科技","佛塑科技","博菲电气"]},{"code":"801037","name":"橡胶","l1":"基础化工","n":17,"top":["联科科技","元创股份","黑猫股份","三力士"]},{"code":"801038","name":"农化制品","l1":"基础化工","n":59,"top":["藏格矿业","湖北宜化","红太阳","安道麦A"]},{"code":"801039","name":"非金属材料Ⅱ","l1":"基础化工","n":8,"top":["长江材料","力量钻石","索通发展","石英股份"]},{"code":"801043","name":"冶钢原料","l1":"钢铁","n":10,"top":["钒钛股份","金岭矿业","河钢资源","大中矿业"]},{"code":"801044","name":"普钢","l1":"钢铁","n":22,"top":["河钢股份","中南股份","本钢板材","新兴铸管"]},{"code":"801045","name":"特钢Ⅱ","l1":"钢铁","n":12,"top":["中信特钢","太钢不锈","沙钢股份","久立特材"]},{"code":"801051","name":"金属新材料","l1":"有色金属","n":32,"top":["合金投资","英洛华","安泰科技","中科三环"]},{"code":"801053","name":"贵金属","l1":"有色金属","n":11,"top":["招金黄金","山金国际","四川黄金","湖南黄金"]},{"code":"801054","name":"小金属","l1":"有色金属","n":27,"top":["中钨高新","国城矿业","中国稀土","锡业股份"]},{"code":"801055","name":"工业金属","l1":"有色金属","n":59,"top":["中金岭南","兴业银锡","盛达资源","焦作万方"]},{"code":"801056","name":"能源金属","l1":"有色金属","n":11,"top":["西藏矿业","融捷股份","盛新锂能","赣锋锂业"]},{"code":"801072","name":"通用设备","l1":"机械设备","n":220,"top":["中集集团","沈阳机床","冰山冷热","中核科技"]},{"code":"801074","name":"专用设备","l1":"机械设备","n":181,"top":["石化机械","冀东装备","和泰机电","炜冈科技"]},{"code":"801076","name":"轨交设备Ⅱ","l1":"机械设备","n":30,"top":["神州高铁","众合科技","中国铁物","长青科技"]},{"code":"801077","name":"工程机械","l1":"机械设备","n":28,"top":["中联重科","徐工机械","柳工","山推股份"]},{"code":"801078","name":"自动化设备","l1":"机械设备","n":82,"top":["华工科技","欧克科技","宏英智能","大族激光"]},{"code":"801081","name":"半导体","l1":"电子","n":181,"top":["德明利","紫光国微","大港股份","康强电子"]},{"code":"801082","name":"其他电子Ⅱ","l1":"电子","n":33,"top":["深圳华强","盈方微","中电港","好上好"]},{"code":"801083","name":"元件","l1":"电子","n":61,"top":["风华高科","超声电子","嘉立创","广合科技"]},{"code":"801084","name":"光学光电子","l1":"电子","n":93,"top":["深华发A","深纺织A","深天马A","TCL科技"]},{"code":"801085","name":"消费电子","l1":"电子","n":91,"top":["深科技","亿道信息","国光电器","ST得润"]},{"code":"801086","name":"电子化学品Ⅱ","l1":"电子","n":35,"top":["西陇科学","万润股份","光华科技","鼎龙股份"]},{"code":"801092","name":"汽车服务","l1":"汽车","n":9,"top":["浩物股份","阿尔特","中汽股份","国机汽车"]},{"code":"801093","name":"汽车零部件","l1":"汽车","n":244,"top":["富奥股份","潍柴动力","万向钱潮","苏常柴A"]},{"code":"801095","name":"乘用车","l1":"汽车","n":8,"top":["海马汽车","长安汽车","比亚迪","上汽集团"]},{"code":"801096","name":"商用车","l1":"汽车","n":13,"top":["江铃汽车","一汽解放","安凯客车","中国重汽"]},{"code":"801101","name":"计算机设备","l1":"计算机","n":82,"top":["中国长城","浪潮信息","新大陆","魅视科技"]},{"code":"801102","name":"通信设备","l1":"通信","n":85,"top":["中兴通讯","特发信息","汇源通信","汇绿生态"]},{"code":"801103","name":"IT服务Ⅱ","l1":"计算机","n":122,"top":["神州数码","常山北明","云鼎科技","神州信息"]},{"code":"801104","name":"软件开发","l1":"计算机","n":130,"top":["国新健康","南天信息","远光软件","石基信息"]},{"code":"801111","name":"白色家电","l1":"家用电器","n":11,"top":["*ST康佳A","美的集团","长虹美菱","格力电器"]},{"code":"801112","name":"黑色家电","l1":"家用电器","n":9,"top":["四川九洲","创维数字","兆驰股份","高斯贝尔"]},{"code":"801113","name":"小家电","l1":"家用电器","n":20,"top":["利仁科技","德豪润达","苏泊尔","九阳股份"]},{"code":"801114","name":"厨卫电器","l1":"家用电器","n":9,"top":["华帝股份","老板电器","万和电气","浙江美大"]},{"code":"801115","name":"照明设备Ⅱ","l1":"家用电器","n":12,"top":["佛山照明","联域股份","星光股份","勤上股份"]},{"code":"801116","name":"家电零部件Ⅱ","l1":"家用电器","n":29,"top":["长虹华意","联合精密","盾安环境","三花智控"]},{"code":"801117","name":"其他家电Ⅱ","l1":"家用电器","n":3,"top":["奥佳华","融捷健康","荣泰健康"]},{"code":"801124","name":"食品加工","l1":"食品饮料","n":25,"top":["广弘控股","ST西王","双汇发展","千味央厨"]},{"code":"801125","name":"白酒Ⅱ","l1":"食品饮料","n":19,"top":["泸州老窖","古井贡酒","酒鬼酒","五粮液"]},{"code":"801126","name":"非白酒","l1":"食品饮料","n":16,"top":["燕京啤酒","*ST西发","张裕A","兰州黄河"]},{"code":"801127","name":"饮料乳品","l1":"食品饮料","n":26,"top":["承德露露","阳光乳业","皇氏集团","贝因美"]},{"code":"801128","name":"休闲食品","l1":"食品饮料","n":22,"top":["黑芝麻","青岛食品","洽洽食品","好想你"]},{"code":"801129","name":"调味发酵品Ⅱ","l1":"食品饮料","n":14,"top":["佳隆股份","涪陵榨菜","ST加加","仲景食品"]},{"code":"801131","name":"纺织制造","l1":"纺织服饰","n":32,"top":["鲁泰A","华茂股份","欣龙控股","福恩股份"]},{"code":"801132","name":"服装家纺","l1":"纺织服饰","n":59,"top":["洪兴股份","泰慕士","七匹狼","报喜鸟"]},{"code":"801133","name":"饰品","l1":"纺织服饰","n":15,"top":["深中华A","飞亚达","潮宏基","明牌珠宝"]},{"code":"801141","name":"包装印刷","l1":"轻工制造","n":40,"top":["珠海中富","陕西金叶","强邦新材","永新股份"]},{"code":"801142","name":"家居用品","l1":"轻工制造","n":73,"top":["大亚圣象","双枪科技","华瓷股份","悍高集团"]},{"code":"801143","name":"造纸","l1":"轻工制造","n":23,"top":["ST晨鸣","凯恩股份","景兴纸业","太阳纸业"]},{"code":"801145","name":"文娱用品","l1":"轻工制造","n":20,"top":["源飞宠物","浙江正特","三柏硕","通达创智"]},{"code":"801151","name":"化学制药","l1":"医药生物","n":149,"top":["丰原药业","丽珠集团","海南海药","东北制药"]},{"code":"801152","name":"生物制品","l1":"医药生物","n":51,"top":["派林生物","四环生物","万泽股份","长春高新"]},{"code":"801153","name":"医疗器械","l1":"医药生物","n":129,"top":["科华生物","达安基因","鱼跃医疗","蓝帆医疗"]},{"code":"801154","name":"医药商业","l1":"医药生物","n":32,"top":["国药一致","ST海王","英特集团","浙江震元"]},{"code":"801155","name":"中药Ⅱ","l1":"医药生物","n":66,"top":["东阿阿胶","云南白药","古汉医药","吉林敖东"]},{"code":"801156","name":"医疗服务","l1":"医药生物","n":51,"top":["南华生物","国际医学","贝瑞基因","美年健康"]},{"code":"801161","name":"电力","l1":"公用事业","n":109,"top":["深圳能源","深南电A","川能动力","珠海港"]},{"code":"801163","name":"燃气Ⅱ","l1":"公用事业","n":28,"top":["胜利股份","德龙汇能","ST金鸿","美能能源"]},{"code":"801178","name":"物流","l1":"交通运输","n":47,"top":["远大控股","浙商中拓","炬申股份","世盟股份"]},{"code":"801179","name":"铁路公路","l1":"交通运输","n":33,"top":["粤高速A","湖南投资","西部创业","山西高速"]},{"code":"801181","name":"房地产开发","l1":"房地产","n":83,"top":["万科A","深振业A","深物业A","沙河股份"]},{"code":"801183","name":"房地产服务","l1":"房地产","n":12,"top":["*ST皇庭","我爱我家","招商积余","中天服务"]},{"code":"801191","name":"多元金融","l1":"非银金融","n":24,"top":["渤海租赁","华金资本","陕国投A","海德股份"]},{"code":"801193","name":"证券Ⅱ","l1":"非银金融","n":50,"top":["申万宏源","东北证券","锦龙股份","国元证券"]},{"code":"801194","name":"保险Ⅱ","l1":"非银金融","n":5,"top":["中国平安","中国人保","新华保险","中国太保"]},{"code":"801202","name":"贸易Ⅱ","l1":"商贸零售","n":12,"top":["中成股份","厦门信达","凯瑞德","江苏国泰"]},{"code":"801203","name":"一般零售","l1":"商贸零售","n":60,"top":["全新好","深赛格","农产品","合百集团"]},{"code":"801204","name":"专业连锁Ⅱ","l1":"商贸零售","n":7,"top":["天音控股","爱施德","吉峰科技","博士眼镜"]},{"code":"801206","name":"互联网电商","l1":"商贸零售","n":18,"top":["ST易购","南极电商","焦点科技","跨境通"]},{"code":"801207","name":"旅游零售Ⅱ","l1":"商贸零售","n":2,"top":["珠免集团","中国中免"]},{"code":"801216","name":"体育Ⅱ","l1":"社会服务","n":2,"top":["力盛体育","中体产业"]},{"code":"801218","name":"专业服务","l1":"社会服务","n":29,"top":["中钢天源","力合科创","广电计量","开普检测"]},{"code":"801219","name":"酒店餐饮","l1":"社会服务","n":9,"top":["华天酒店","西安饮食","全聚德","ST云网"]},{"code":"801223","name":"通信服务","l1":"通信","n":37,"top":["国安股份","中嘉博创","三维通信","梦网科技"]},{"code":"801231","name":"综合Ⅱ","l1":"综合","n":20,"top":["特力A","南京公用","红棉股份","ST三木"]},{"code":"801711","name":"水泥","l1":"建筑材料","n":21,"top":["金隅冀东","上峰材料","万年青","天山股份"]},{"code":"801712","name":"玻璃玻纤","l1":"建筑材料","n":16,"top":["南玻A","中材科技","九鼎新材","北玻股份"]},{"code":"801713","name":"装修建材","l1":"建筑材料","n":35,"top":["方大集团","海螺新材","北新建材","中旗新材"]},{"code":"801721","name":"房屋建设Ⅱ","l1":"建筑装饰","n":8,"top":["高新发展","浙江建投","上海建工","陕建股份"]},{"code":"801722","name":"装修装饰Ⅱ","l1":"建筑装饰","n":22,"top":["宝鹰股份","金螳螂","海南发展","亚厦股份"]},{"code":"801723","name":"基础建设","l1":"建筑装饰","n":40,"top":["*ST美丽","山东路桥","誉帆科技","广东建工"]},{"code":"801724","name":"专业工程","l1":"建筑装饰","n":37,"top":["深桑达A","北方国际","中钢国际","中工国际"]},{"code":"801726","name":"工程咨询服务Ⅱ","l1":"建筑装饰","n":40,"top":["甘咨询","*ST中设","华阳国际","地铁设计"]},{"code":"801731","name":"电机Ⅱ","l1":"电力设备","n":26,"top":["佳电股份","江特电机","方正电机","大洋电机"]},{"code":"801733","name":"其他电源设备Ⅱ","l1":"电力设备","n":32,"top":["同洲电子","*ST特迅","海陆重工","科华数据"]},{"code":"801735","name":"光伏设备","l1":"电力设备","n":67,"top":["国际实业","ST京机","欧晶科技","横店东磁"]},{"code":"801736","name":"风电设备","l1":"电力设备","n":31,"top":["和展能源","金风科技","大金重工","天顺风能"]},{"code":"801737","name":"电池","l1":"电力设备","n":97,"top":["中国宝安","德赛电池","滨海能源","豪鹏科技"]},{"code":"801738","name":"电网设备","l1":"电力设备","n":126,"top":["许继电气","顺钠股份","东方电子","新能泰山"]},{"code":"801741","name":"航天装备Ⅱ","l1":"国防军工","n":9,"top":["星网宇达","中天火箭","新余国科","中国卫星"]},{"code":"801742","name":"航空装备Ⅱ","l1":"国防军工","n":46,"top":["烽火电子","炼石航空","航发控制","中航西飞"]},{"code":"801743","name":"地面兵装Ⅱ","l1":"国防军工","n":12,"top":["中兵红箭","甘化科工","银河电子","ST应急"]},{"code":"801744","name":"航海装备Ⅱ","l1":"国防军工","n":10,"top":["天海防务","海兰信","江龙船艇","国瑞科技"]},{"code":"801745","name":"军工电子Ⅱ","l1":"国防军工","n":60,"top":["航天发展","振华科技","铖昌科技","航天电器"]},{"code":"801764","name":"游戏Ⅱ","l1":"传媒","n":26,"top":["游族网络","凯撒文化","恺英网络","三七互娱"]},{"code":"801765","name":"广告营销","l1":"传媒","n":28,"top":["华媒控股","智度股份","分众传媒","新华都"]},{"code":"801766","name":"影视院线","l1":"传媒","n":19,"top":["北京文化","欢瑞世纪","博纳影业","奥飞娱乐"]},{"code":"801767","name":"数字媒体","l1":"传媒","n":14,"top":["视觉中国","生意宝","*ST三六","芒果超媒"]},{"code":"801769","name":"出版","l1":"传媒","n":29,"top":["中原传媒","ST华闻","粤传媒","天舟文化"]},{"code":"801782","name":"国有大型银行Ⅱ","l1":"银行","n":6,"top":["农业银行","交通银行","工商银行","邮储银行"]},{"code":"801783","name":"股份制银行Ⅱ","l1":"银行","n":9,"top":["平安银行","浦发银行","华夏银行","民生银行"]},{"code":"801784","name":"城商行Ⅱ","l1":"银行","n":17,"top":["兰州银行","宁波银行","郑州银行","青岛银行"]},{"code":"801785","name":"农商行Ⅱ","l1":"银行","n":10,"top":["江阴银行","张家港行","青农商行","无锡银行"]},{"code":"801881","name":"摩托车及其他","l1":"汽车","n":16,"top":["钱江摩托","信隆健康","征和工业","久祺股份"]},{"code":"801951","name":"煤炭开采","l1":"煤炭","n":26,"top":["甘肃能化","新大洲A","冀中能源","山西焦煤"]},{"code":"801952","name":"焦炭Ⅱ","l1":"煤炭","n":7,"top":["美锦能源","安泰集团","云维股份","山西焦化"]},{"code":"801961","name":"油气开采Ⅱ","l1":"石油石化","n":4,"top":["蓝焰控股","ST洲际","新潮能源","中国海油"]},{"code":"801962","name":"油服工程","l1":"石油石化","n":13,"top":["*ST准油","惠博普","仁智股份","贝肯能源"]},{"code":"801963","name":"炼化及贸易","l1":"石油石化","n":30,"top":["华锦股份","广聚能源","东方盛虹","泰山石油"]},{"code":"801971","name":"环境治理","l1":"环保","n":104,"top":["中国天楹","华控赛格","中原环保","金圆股份"]},{"code":"801972","name":"环保设备Ⅱ","l1":"环保","n":26,"top":["创元科技","神雾节能","法尔胜","盈峰环境"]},{"code":"801981","name":"个护用品","l1":"美容护理","n":12,"top":["依依股份","登康口腔","中顺洁柔","百亚股份"]},{"code":"801982","name":"化妆品","l1":"美容护理","n":13,"top":["青岛金王","诺斯贝尔","水羊股份","锦盛新材"]},{"code":"801983","name":"医疗美容","l1":"美容护理","n":3,"top":["*ST美谷","爱美客","华熙生物"]},{"code":"801991","name":"航空机场","l1":"交通运输","n":12,"top":["深圳机场","中信海直","华夏航空","白云机场"]},{"code":"801992","name":"航运港口","l1":"交通运输","n":34,"top":["盐田港","凤凰航运","北部湾港","厦门港务"]},{"code":"801993","name":"旅游及景区","l1":"社会服务","n":25,"top":["张家界","岭南控股","天府文旅","*ST西旅"]},{"code":"801994","name":"教育","l1":"社会服务","n":17,"top":["学大教育","国脉科技","中公教育","凯文教育"]},{"code":"801995","name":"电视广播Ⅱ","l1":"传媒","n":14,"top":["华数传媒","湖北广电","电广传媒","天威视讯"]}];
+
+/* ══════ 模拟资金流（确定性伪随机，保证刷新一致）══════ */
+function seedOf(str){let h=2166136261;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+const IND = SW.map(x=>{
+  const r1 = mulberry(seedOf(x.code));
+  const r2 = mulberry(seedOf(x.code+'|5'));
+  const r3 = mulberry(seedOf(x.code+'|10'));
+  const scale = Math.pow(x.n, .42);
+  const mk = (r, bias) => {
+    const g = (r()+r()+r()-1.5)/1.5;
+    return g * scale * 1.35 + bias * scale * 0.55;
+  };
+  const amt = (0.8 + r1()*7.2) * scale;              // 成交额（亿元）
+  const f1  = mk(r1, 0.28);                          // 今日净流入（亿元）
+  const f5  = f1*0.9 + mk(r2, 0.16)*2.1;
+  const f10 = f5*0.85 + mk(r3, 0.10)*2.4;
+  const pct = (f1/Math.max(amt*0.14,0.35));          // 强度：净流入/成交额
+  const chg = (f1/Math.max(scale*0.5,1))*0.55 + (r1()-.5)*0.9;
+  return {...x, amt, f:{1:f1,5:f5,10:f10}, chg, strength:pct};
+});
+
+let period = 1, view = 'map', query = '';
+
+/* ══════ 工具 ══════ */
+const fmtAmt = v => (v>=0?'+':'') + v.toFixed(1);
+const fmtYi  = v => (v>=0?'+':'') + v.toFixed(2) + '亿';
+const cls    = v => v>0.02?'up':(v<-0.02?'down':'flat');
+const pctStr = v => (v>=0?'+':'') + v.toFixed(2) + '%';
+
+/* 颜色档位（6 级） */
+const UP_STEPS=[['rgba(255,77,79,.16)','#ffd9d9'],['rgba(255,77,79,.28)','#ffd0d0'],
+                ['rgba(255,77,79,.45)','#ffc4c4'],['rgba(255,77,79,.64)','#ffb8b8'],
+                ['rgba(255,77,79,.82)','#fff'],['rgba(255,77,79,1)','#fff']];
+const DN_STEPS=[['rgba(0,196,140,.16)','#c9f7e8'],['rgba(0,196,140,.28)','#bdf4e2'],
+                ['rgba(0,196,140,.45)','#a9efda'],['rgba(0,196,140,.64)','#93e9d0'],
+                ['rgba(0,196,140,.82)','#fff'],['rgba(0,196,140,1)','#fff']];
+function tileColor(v, maxAbs){
+  if(Math.abs(v)<0.01) return ['#22252a','#c9ced6'];
+  const t = Math.min(Math.abs(v)/maxAbs, 1);
+  const idx = Math.min(Math.floor(t*6), 5);
+  return v>0 ? UP_STEPS[idx] : DN_STEPS[idx];
+}
+function barColor(v){
+  return v>0 ? 'var(--up)' : (v<0 ? 'var(--down)' : 'var(--flat)');
+}
+
+/* ══════ 筛选 ══════ */
+function filtered(){
+  const q = query.trim().toLowerCase();
+  if(!q) return IND;
+  return IND.filter(x =>
+    x.name.toLowerCase().includes(q) ||
+    x.code.includes(q) ||
+    x.l1.toLowerCase().includes(q) ||
+    x.top.some(t=>t.toLowerCase().includes(q))
+  );
+}
+
+/* ══════ 热力图（squarified treemap）══════ */
+function layout(items, x, y, w, h, out){
+  if(!items.length || w<1 || h<1) return;
+  if(items.length===1){ out.push({...items[0], x, y, w, h}); return; }
+  const total = items.reduce((s,i)=>s+i.amt,0);
+  if(total<=0){ out.push(...items.map(i=>({...i,x,y,w,h}))); return; }
+  // 取前 40% 面积作为第一行
+  let acc=0, split=1;
+  for(let i=0;i<items.length;i++){ acc+=items[i].amt; if(acc/total>=0.4){ split=i+1; break; } }
+  const row = items.slice(0,split), rest = items.slice(split);
+  const rowSum = row.reduce((s,i)=>s+i.amt,0);
+  const frac = rowSum/total;
+  if(w>=h){
+    const rw = w*frac;
+    let cy=y;
+    row.forEach(i=>{ const ih=h*(i.amt/rowSum); out.push({...i,x,y:cy,w:rw,h:ih}); cy+=ih; });
+    layout(rest, x+rw, y, w-rw, h, out);
+  } else {
+    const rh = h*frac;
+    let cx=x;
+    row.forEach(i=>{ const iw=w*(i.amt/rowSum); out.push({...i,x:cx,y,w:iw,h:rh}); cx+=iw; });
+    layout(rest, x, y+rh, w, h-rh, out);
+  }
+}
+
+function renderMap(){
+  const box = document.getElementById('treemap');
+  const list = filtered().slice().sort((a,b)=>b.amt-a.amt);
+  if(!list.length){ box.innerHTML='<div class="empty">没有匹配的行业</div>'; return; }
+
+  const W = box.clientWidth-10, H = Math.max(box.clientHeight, 440)-10;
+  if(W<=0){ return; }
+  const tiles=[]; layout(list,0,0,W,H,tiles);
+  const maxAbs = Math.max(...list.map(i=>Math.abs(i.f[i] ? i.f[period] : 0)), 1);
+
+  box.innerHTML = tiles.map(t=>{
+    const v = t.f[period], [bg,fg] = tileColor(v, maxAbs);
+    const area = t.w*t.h, size = area>11000?'':(area>3600?'s':'xs');
+    return `<div class="tile" data-s="${size}" data-code="${t.code}"
+      style="left:${t.x+5}px;top:${t.y+5}px;width:${Math.max(t.w-2,0)}px;height:${Math.max(t.h-2,0)}px;background:${bg};color:${fg}"
+      title="${t.name}　${fmtYi(v)}">
+      <div><div class="tile-name">${t.name}</div><div class="tile-l1">${t.l1}</div></div>
+      <div><div class="tile-flow">${fmtAmt(v)}</div><div class="tile-pct">${pctStr(t.chg)}</div></div>
+    </div>`;
+  }).join('');
+}
+
+/* ══════ 排行表 ══════ */
+function renderTable(){
+  const list = filtered().slice().sort((a,b)=>b.f[period]-a.f[period]);
+  const maxAbs = Math.max(...list.map(i=>Math.abs(i.f[period])), 1);
+  document.getElementById('tbody').innerHTML = list.map((x,i)=>{
+    const v = x.f[period], w = Math.min(Math.abs(v)/maxAbs*100,100);
+    return `<tr data-code="${x.code}">
+      <td class="rank">${i+1}</td>
+      <td><span class="ind-name">${x.name}</span><span class="ind-code">${x.code}</span></td>
+      <td><span class="l1-tag">${x.l1}</span></td>
+      <td class="num" style="color:var(--text-dim)">${x.n}</td>
+      <td class="num ${cls(v)}" style="font-weight:600">${fmtYi(v)}</td>
+      <td class="num ${cls(x.strength)}">${pctStr(x.strength*100)}</td>
+      <td class="num ${cls(x.chg)}">${pctStr(x.chg)}</td>
+      <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:${w}%;background:${barColor(v)}"></div></div></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('rowCount').textContent = `共 ${list.length} 个行业`;
+}
+
+/* ══════ 概览 ══════ */
+function renderOverview(){
+  const list = filtered();
+  if(!list.length){
+    ['ovIn','ovOut','ovNet','ovExtreme'].forEach(id=>document.getElementById(id).textContent='—');
+    return;
+  }
+  const inN = list.filter(x=>x.f[period]>0).length;
+  const outN = list.filter(x=>x.f[period]<0).length;
+  const net  = list.reduce((s,x)=>s+x.f[period],0);
+  const sorted = list.slice().sort((a,b)=>b.f[period]-a.f[period]);
+  const best = sorted[0], worst = sorted[sorted.length-1];
+
+  document.getElementById('ovIn').textContent = inN;
+  document.getElementById('ovInSub').textContent = `占比 ${(inN/list.length*100).toFixed(0)}%`;
+  document.getElementById('ovOut').textContent = outN;
+  document.getElementById('ovOutSub').textContent = `占比 ${(outN/list.length*100).toFixed(0)}%`;
+  const netEl = document.getElementById('ovNet');
+  netEl.textContent = fmtYi(net);
+  netEl.className = 'ov-val ' + cls(net);
+  document.getElementById('ovExtreme').innerHTML =
+    `<span class="up">${best.name}</span> <span style="color:var(--text-dim);font-size:13px">/</span> <span class="down">${worst.name}</span>`;
+  document.getElementById('ovExtremeSub').textContent =
+    `${fmtAmt(best.f[period])}亿 / ${fmtAmt(worst.f[period])}亿`;
+}
+
+/* ══════ 抽屉 ══════ */
+function openDrawer(code){
+  const x = IND.find(i=>i.code===code); if(!x) return;
+  const v = x.f[period];
+  document.getElementById('dTitle').textContent = x.name;
+  document.getElementById('dMeta').innerHTML =
+    `<span class="l1-tag">${x.l1}</span><span class="num">${x.code}</span><span>成分股 ${x.n} 只</span>`;
+  document.getElementById('dBody').innerHTML = `
+    <div class="flow-big ${cls(v)}">${fmtYi(v)}</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:20px">
+      ${period===1?'今日':period+'日'}主力净流入
+    </div>
+    <div class="kv"><span class="k">行业涨跌幅</span><span class="v ${cls(x.chg)}">${pctStr(x.chg)}</span></div>
+    <div class="kv"><span class="k">净流入占比</span><span class="v ${cls(x.strength)}">${pctStr(x.strength*100)}</span></div>
+    <div class="kv"><span class="k">成交额（估）</span><span class="v">${x.amt.toFixed(1)} 亿</span></div>
+    <div class="kv"><span class="k">5日净流入</span><span class="v ${cls(x.f[5])}">${fmtYi(x.f[5])}</span></div>
+    <div class="kv"><span class="k">10日净流入</span><span class="v ${cls(x.f[10])}">${fmtYi(x.f[10])}</span></div>
+    <div class="sec-t">代表个股</div>
+    <div class="chips">${x.top.map(t=>`<span class="chip">${t}</span>`).join('')}</div>
+    <div class="sec-t">归属</div>
+    <div class="kv"><span class="k">一级行业</span><span class="v">${x.l1}</span></div>
+    <div class="kv"><span class="k">二级代码</span><span class="v">${x.code}</span></div>
+  `;
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('scrim').classList.add('open');
+  document.getElementById('dClose').focus();
+}
+function closeDrawer(){
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('scrim').classList.remove('open');
+}
+
+/* ══════ 渲染调度 ══════ */
+function render(){
+  const n = filtered().length;
+  document.getElementById('hint').textContent =
+    query ? `匹配 ${n} / ${IND.length} 个行业` : `共 ${IND.length} 个二级行业`;
+  renderOverview();
+  if(view==='map') renderMap(); else renderTable();
+}
+
+/* ══════ 事件 ══════ */
+document.getElementById('periodSeg').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  period = +b.dataset.p;
+  [...e.currentTarget.children].forEach(x=>x.setAttribute('aria-pressed', String(x===b)));
+  document.getElementById('tableSub').textContent =
+    `按${period===1?'今日':period+'日'}主力净流入排序`;
+  render();
+});
+document.getElementById('viewSeg').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  view = b.dataset.v;
+  [...e.currentTarget.children].forEach(x=>x.setAttribute('aria-pressed', String(x===b)));
+  document.getElementById('mapPanel').hidden = view!=='map';
+  document.getElementById('tablePanel').hidden = view!=='table';
+  render();
+  if(view==='map') requestAnimationFrame(renderMap);
+});
+
+let tq;
+document.getElementById('q').addEventListener('input', e=>{
+  clearTimeout(tq);
+  tq = setTimeout(()=>{ query = e.target.value; render(); }, 120);
+});
+
+document.getElementById('treemap').addEventListener('click', e=>{
+  const t = e.target.closest('.tile'); if(t) openDrawer(t.dataset.code);
+});
+document.getElementById('tbody').addEventListener('click', e=>{
+  const t = e.target.closest('tr'); if(t) openDrawer(t.dataset.code);
+});
+document.getElementById('dClose').addEventListener('click', closeDrawer);
+document.getElementById('scrim').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeDrawer(); });
+
+let rt;
+window.addEventListener('resize', ()=>{
+  clearTimeout(rt);
+  rt = setTimeout(()=>{ if(view==='map') renderMap(); }, 160);
+});
+
+/* ══════ 启动 ══════ */
+render();
+requestAnimationFrame(()=>{ if(view==='map') renderMap(); });
+setTimeout(()=>{
+  const el = document.getElementById('liveText');
+  if(el) el.textContent = '模拟数据 · ' + new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+}, 300);
+</script>
+</body>
+</html>
