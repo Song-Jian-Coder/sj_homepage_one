@@ -115,29 +115,28 @@ header{
   width:104px;height:7px;border-radius:100px;
   background:linear-gradient(90deg,var(--down) 0%,#2a2e34 50%,var(--up) 100%);
 }
-#treemap{position:relative;padding:5px;height:calc(100vh - 330px);min-height:560px;max-height:900px}
+#treemap{padding:6px}
+.tile-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(104px,1fr));
+  gap:4px;
+}
 
 .tile{
-  position:absolute;border-radius:var(--r-sm);overflow:hidden;cursor:pointer;
-  border:1px solid transparent;padding:9px 10px;
-  transition:transform .16s var(--ease),border-color .16s var(--ease),box-shadow .16s var(--ease);
-  display:flex;flex-direction:column;justify-content:space-between;
+  border-radius:var(--r-sm);overflow:hidden;cursor:pointer;
+  border:1px solid rgba(255,255,255,.06);padding:9px 10px;
+  min-height:66px;
+  transition:transform .16s var(--ease),border-color .16s var(--ease),box-shadow .16s var(--ease),filter .16s var(--ease);
+  display:flex;flex-direction:column;justify-content:space-between;gap:6px;
 }
-.tile:hover{transform:translateY(-1px);border-color:rgba(255,255,255,.28);box-shadow:0 6px 20px rgba(0,0,0,.45);z-index:5}
+.tile:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.3);box-shadow:0 6px 20px rgba(0,0,0,.5);z-index:5;filter:brightness(1.08)}
+.tile:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .tile-name{
-  font-size:12.5px;font-weight:600;line-height:1.28;letter-spacing:-.01em;
+  font-size:12px;font-weight:600;line-height:1.25;letter-spacing:-.01em;
   overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  word-break:break-all;
 }
-.tile-l1{font-size:10px;opacity:.62;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tile-flow{font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:-.03em;line-height:1.15}
-.tile-pct{font-family:var(--mono);font-size:10.5px;opacity:.72;margin-top:2px}
-.tile[data-s="s"]{padding:7px 8px}
-.tile[data-s="s"] .tile-name{font-size:11px;-webkit-line-clamp:1}
-.tile[data-s="s"] .tile-flow{font-size:11.5px}
-.tile[data-s="s"] .tile-l1,.tile[data-s="s"] .tile-pct{display:none}
-.tile[data-s="xs"]{padding:5px 6px;justify-content:center}
-.tile[data-s="xs"] .tile-name{font-size:9.5px;-webkit-line-clamp:1}
-.tile[data-s="xs"] .tile-flow,.tile[data-s="xs"] .tile-l1,.tile[data-s="xs"] .tile-pct{display:none}
+.tile-flow{font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:-.03em;line-height:1.1}
 
 /* ── 排行表 ── */
 .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -182,6 +181,13 @@ tbody tr:last-child td{border-bottom:none}
 .drawer-title{font-size:19px;font-weight:600;letter-spacing:-.025em;margin-bottom:5px}
 .drawer-meta{font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .drawer-body{padding:20px 22px;overflow-y:auto;flex:1}
+.jump-link{
+  position:absolute;top:20px;right:58px;font-size:12px;color:var(--text-muted);
+  padding:6px 11px;border:1px solid var(--border);border-radius:var(--r-sm);
+  transition:all .16s var(--ease);white-space:nowrap;
+}
+.jump-link:hover{color:#a9b0e0;border-color:var(--accent-line);background:var(--accent-dim)}
+@media (max-width:560px){ .jump-link{display:none} }
 .drawer-close{
   position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:var(--r-sm);
   display:grid;place-items:center;color:var(--text-muted);border:1px solid transparent;
@@ -354,6 +360,7 @@ footer{
   <div class="drawer-head">
     <div class="drawer-title" id="dTitle">—</div>
     <div class="drawer-meta" id="dMeta"></div>
+    <a class="jump-link" id="dClassLink" href="industry.html">在行业分类中查看 →</a>
   </div>
   <div class="drawer-body" id="dBody"></div>
 </aside>
@@ -421,50 +428,20 @@ function filtered(){
 }
 
 /* ══════ 热力图（squarified treemap）══════ */
-function layout(items, x, y, w, h, out){
-  if(!items.length || w<1 || h<1) return;
-  if(items.length===1){ out.push({...items[0], x, y, w, h}); return; }
-  const total = items.reduce((s,i)=>s+i.amt,0);
-  if(total<=0){ out.push(...items.map(i=>({...i,x,y,w,h}))); return; }
-  // 取前 40% 面积作为第一行
-  let acc=0, split=1;
-  for(let i=0;i<items.length;i++){ acc+=items[i].amt; if(acc/total>=0.4){ split=i+1; break; } }
-  const row = items.slice(0,split), rest = items.slice(split);
-  const rowSum = row.reduce((s,i)=>s+i.amt,0);
-  const frac = rowSum/total;
-  if(w>=h){
-    const rw = w*frac;
-    let cy=y;
-    row.forEach(i=>{ const ih=h*(i.amt/rowSum); out.push({...i,x,y:cy,w:rw,h:ih}); cy+=ih; });
-    layout(rest, x+rw, y, w-rw, h, out);
-  } else {
-    const rh = h*frac;
-    let cx=x;
-    row.forEach(i=>{ const iw=w*(i.amt/rowSum); out.push({...i,x:cx,y,w:iw,h:rh}); cx+=iw; });
-    layout(rest, x, y+rh, w, h-rh, out);
-  }
-}
-
 function renderMap(){
   const box = document.getElementById('treemap');
-  const list = filtered().slice().sort((a,b)=>b.amt-a.amt);
+  const list = filtered().slice().sort((a,b)=>b.f[period]-a.f[period]);
   if(!list.length){ box.innerHTML='<div class="empty">没有匹配的行业</div>'; return; }
 
-  const W = box.clientWidth-10, H = Math.max(box.clientHeight, 440)-10;
-  if(W<=0){ return; }
-  const tiles=[]; layout(list,0,0,W,H,tiles);
-  const maxAbs = Math.max(...list.map(i=>Math.abs(i.f[i] ? i.f[period] : 0)), 1);
-
-  box.innerHTML = tiles.map(t=>{
+  const maxAbs = Math.max(...list.map(i=>Math.abs(i.f[period])), 1);
+  box.innerHTML = `<div class="tile-grid">` + list.map(t=>{
     const v = t.f[period], [bg,fg] = tileColor(v, maxAbs);
-    const area = t.w*t.h, size = area>11000?'':(area>3600?'s':'xs');
-    return `<div class="tile" data-s="${size}" data-code="${t.code}"
-      style="left:${t.x+5}px;top:${t.y+5}px;width:${Math.max(t.w-2,0)}px;height:${Math.max(t.h-2,0)}px;background:${bg};color:${fg}"
-      title="${t.name}　${fmtYi(v)}">
-      <div><div class="tile-name">${t.name}</div><div class="tile-l1">${t.l1}</div></div>
-      <div><div class="tile-flow">${fmtAmt(v)}</div><div class="tile-pct">${pctStr(t.chg)}</div></div>
+    return `<div class="tile" data-code="${t.code}" style="background:${bg};color:${fg}"
+      title="${t.name}　${fmtYi(v)}　${t.l1}">
+      <div class="tile-name">${t.name}</div>
+      <div class="tile-flow">${fmtAmt(v)}</div>
     </div>`;
-  }).join('');
+  }).join('') + `</div>`;
 }
 
 /* ══════ 排行表 ══════ */
@@ -536,6 +513,8 @@ function openDrawer(code){
     <div class="kv"><span class="k">一级行业</span><span class="v">${x.l1}</span></div>
     <div class="kv"><span class="k">二级代码</span><span class="v">${x.code}</span></div>
   `;
+  const link = document.getElementById('dClassLink');
+  if(link) link.href = 'industry.html?ind=' + encodeURIComponent(code) + '&name=' + encodeURIComponent(x.name);
   document.getElementById('drawer').classList.add('open');
   document.getElementById('scrim').classList.add('open');
   document.getElementById('dClose').focus();
@@ -589,15 +568,10 @@ document.getElementById('dClose').addEventListener('click', closeDrawer);
 document.getElementById('scrim').addEventListener('click', closeDrawer);
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeDrawer(); });
 
-let rt;
-window.addEventListener('resize', ()=>{
-  clearTimeout(rt);
-  rt = setTimeout(()=>{ if(view==='map') renderMap(); }, 160);
-});
+
 
 /* ══════ 启动 ══════ */
 render();
-requestAnimationFrame(()=>{ if(view==='map') renderMap(); });
 setTimeout(()=>{
   const el = document.getElementById('liveText');
   if(el) el.textContent = '模拟数据 · ' + new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});

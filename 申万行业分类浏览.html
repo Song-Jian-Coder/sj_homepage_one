@@ -98,17 +98,19 @@ main{max-width:1400px;margin:0 auto;padding:18px 20px 40px}
   background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);flex:none}
 
 /* 股票网格 */
-.stocks{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));
-  gap:1px;background:var(--border);border-top:1px solid var(--border)}
+.stocks{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
+  gap:1px;background:var(--bg-elev);border-top:1px solid var(--border)}
+.stocks > .stock{box-shadow:0 0 0 1px var(--border)}
 .stock{display:flex;align-items:center;gap:9px;padding:9px 14px 9px 74px;
   background:var(--bg-elev);transition:background-color .14s var(--ease);text-align:left;width:100%}
 .stock:hover{background:var(--surface-2)}
 .stock-code{font-family:var(--mono);font-size:11.5px;color:var(--text-dim);flex:none}
-.stock-name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stock-name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:52px}
 .ex{font-size:10px;padding:1px 5px;border-radius:3px;border:1px solid var(--border);
   color:var(--text-dim);flex:none;margin-left:auto}
 .hit{background:rgba(94,106,210,.1)}
 mark{background:rgba(94,106,210,.3);color:#cfd4ff;border-radius:2px;padding:0 1px}
+.stub-empty{padding:14px 20px 14px 74px;color:var(--text-dim);font-size:12.5px}
 .empty{padding:56px 20px;text-align:center;color:var(--text-dim);font-size:13px}
 
 /* 抽屉 */
@@ -169,6 +171,18 @@ svg.chart{display:block;width:100%;overflow:visible}
 .comp-code{font-family:var(--mono);font-size:11.5px;color:var(--text-dim);flex:none}
 .comp-name{font-size:12.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .comp-val{font-family:var(--mono);font-size:12.5px;font-weight:500;flex:none}
+.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);
+  border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:8px}
+.metric{background:var(--surface);padding:13px 15px}
+.metric-l{font-size:11.5px;color:var(--text-dim);margin-bottom:7px}
+.metric-v{font-family:var(--mono);font-size:18px;font-weight:600;letter-spacing:-.03em;line-height:1.2}
+.metric-v .unit{font-size:12px;margin-left:1px;color:var(--text-dim)}
+.metric-sub{font-size:11px;color:var(--text-dim);margin-top:5px;line-height:1.4}
+.metric-bar{height:4px;border-radius:100px;background:var(--surface-2);overflow:hidden;margin-top:7px}
+.metric-bar i{display:block;height:100%;border-radius:100px;transition:width .35s var(--ease)}
+.metric-note{font-size:11px;color:var(--text-dim);margin-bottom:18px;text-align:right}
+@media (max-width:520px){ .metric-grid{grid-template-columns:1fr} }
+
 .tree-path{margin-top:22px;border-top:1px solid var(--border);padding-top:16px}
 .tp-t{font-size:11.5px;color:var(--text-dim);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px;font-weight:500}
 .tp-row{display:flex;gap:12px;padding:7px 0;font-size:13px;align-items:baseline}
@@ -178,6 +192,28 @@ svg.chart{display:block;width:100%;overflow:visible}
 
 footer{border-top:1px solid var(--border);padding:22px 0;font-size:12px;color:var(--text-dim);
   max-width:1400px;margin:0 auto;padding-left:20px;padding-right:20px}
+
+/* P0-2 触控目标：移动端与触屏设备最小 44px */
+.flow-btn{min-height:24px;display:inline-flex;align-items:center}
+@media (pointer:coarse){
+  .flow-btn{padding:0 12px;height:34px;font-size:12px}
+  .stock{min-height:52px}
+  .l1-head{min-height:54px}
+  .l2-head{min-height:50px}
+  .l3-head{min-height:48px}
+  .btn-sm{height:44px;padding:0 16px}
+  .seg button{padding:10px 15px}
+  .drawer-close{width:44px;height:44px;top:12px;right:12px}
+  .comp-item{min-height:48px}
+}
+
+/* P0-3 抽屉内数据免责标识 */
+.data-note{
+  display:flex;align-items:flex-start;gap:8px;padding:9px 12px;margin-bottom:16px;
+  background:rgba(255,171,0,.09);border:1px solid rgba(255,171,0,.3);
+  border-radius:var(--r-sm);font-size:12px;color:#e0b775;line-height:1.55;
+}
+.data-note b{color:#f0c98a;font-weight:600}
 
 @media (max-width:860px){
   .search{width:100%;order:3;margin-bottom:10px}
@@ -206,6 +242,18 @@ footer{border-top:1px solid var(--border);padding:22px 0;font-size:12px;color:va
 .comp-code{font-family:var(--mono);font-size:11.5px;color:var(--text-dim);flex:none}
 .comp-name{font-size:12.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .comp-val{font-family:var(--mono);font-size:12.5px;font-weight:500;flex:none}
+.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);
+  border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:8px}
+.metric{background:var(--surface);padding:13px 15px}
+.metric-l{font-size:11.5px;color:var(--text-dim);margin-bottom:7px}
+.metric-v{font-family:var(--mono);font-size:18px;font-weight:600;letter-spacing:-.03em;line-height:1.2}
+.metric-v .unit{font-size:12px;margin-left:1px;color:var(--text-dim)}
+.metric-sub{font-size:11px;color:var(--text-dim);margin-top:5px;line-height:1.4}
+.metric-bar{height:4px;border-radius:100px;background:var(--surface-2);overflow:hidden;margin-top:7px}
+.metric-bar i{display:block;height:100%;border-radius:100px;transition:width .35s var(--ease)}
+.metric-note{font-size:11px;color:var(--text-dim);margin-bottom:18px;text-align:right}
+@media (max-width:520px){ .metric-grid{grid-template-columns:1fr} }
+
 .tree-path{margin-top:22px;border-top:1px solid var(--border);padding-top:16px}
 .tp-t{font-size:11.5px;color:var(--text-dim);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px;font-weight:500}
 .tp-row{display:flex;gap:12px;padding:7px 0;font-size:13px;align-items:baseline}
@@ -241,12 +289,12 @@ footer{border-top:1px solid var(--border);padding:22px 0;font-size:12px;color:va
       <button data-ex="1" aria-pressed="false">上交所</button>
       <button data-ex="0" aria-pressed="false">深交所</button>
     </div>
-    <button class="btn-sm" id="expandAll">全部展开</button>
+    <button class="btn-sm" id="expandAll">展开当前行业</button>
     <button class="btn-sm" id="collapseAll">全部收起</button>
     <span class="stat-inline" id="statLine"></span>
   </div>
 
-  <div class="tree" id="tree"></div>
+  <div class="tree" id="tree" role="tree" aria-label="申万行业分类"></div>
 </main>
 
 <footer>数据分类：申万行业分类（2026-09-21 版）　·　不含投资建议</footer>
@@ -357,80 +405,131 @@ function hl(text, q){
 /* ═══════════ 树渲染 ═══════════ */
 let exFilter = 'all', term = '';
 
+/* 搜索匹配：
+   - 命中行业名（一/二/三级）→ 该行业下所有股票全部命中
+   - 命中股票名或代码 → 仅命中该股票
+   返回 { codes:Set, indL1:Set, indL2:Set, indL3:Set } */
 function matchCount(){
   if(!term && exFilter==='all') return null;
-  const q = term.toLowerCase();
-  const hit = new Set();
-  ALL_STOCKS.forEach(s => {
-    if(exFilter!=='all' && s.ex!==exFilter) return;
-    if(q && !(s.name.toLowerCase().includes(q)||s.code.includes(q))) return;
-    hit.add(s.code);
+  const q = term.toLowerCase().trim();
+  const codes = new Set(), indL1 = new Set(), indL2 = new Set(), indL3 = new Set();
+  if(!q) {
+    ALL_STOCKS.forEach(s => { if(exFilter==='all' || s.ex===exFilter) codes.add(s.code); });
+    return {codes, indL1, indL2, indL3, pureIndustry:false};
+  }
+
+  TREE.forEach(l1 => {
+    const l1Hit = l1.n.toLowerCase().includes(q) || l1.c.includes(q);
+    if(l1Hit) indL1.add(l1.c);
+    l1.l2.forEach(l2 => {
+      const l2Hit = l2.n.toLowerCase().includes(q) || l2.c.includes(q);
+      if(l2Hit) indL2.add(l2.c);
+      l2.l3.forEach(l3 => {
+        const l3Hit = l3.n.toLowerCase().includes(q) || l3.c.includes(q);
+        if(l3Hit) indL3.add(l3.c);
+        (STOCKS[l3.c] || []).forEach(str => {
+          const [code, name, ex] = str.split('|');
+          if(exFilter!=='all' && ex!==exFilter) return;
+          if(l1Hit || l2Hit || l3Hit || name.toLowerCase().includes(q) || code.includes(q)) {
+            codes.add(code);
+          }
+        });
+      });
+    });
   });
-  return hit;
+  return {codes, indL1, indL2, indL3, pureIndustry:false};
+}
+
+/* ═══════════ 树渲染（骨架 + 懒加载股票）═══════════
+   首屏只渲染行业骨架（31/131/336 个节点），
+   股票列表在三级节点展开时才注入 DOM —— 控制首屏节点数 */
+function stocksOfL3(l3c, q, hits){
+  let list = (STOCKS[l3c] || []).map(str => {
+    const [code, name, ex] = str.split('|');
+    return {code, name, ex};
+  });
+  if(exFilter!=='all') list = list.filter(s => s.ex===exFilter);
+  if(hits) list = list.filter(s => hits.codes.has(s.code));
+  return list;
+}
+
+function countL3(l3c, hits){
+  const arr = STOCKS[l3c] || [];
+  if(hits) return arr.filter(x=>hits.codes.has(x.split('|')[0])).length;
+  if(exFilter!=='all') return arr.filter(x=>x.split('|')[2]===exFilter).length;
+  return arr.length;
+}
+
+/* 把股票列表填入已展开的三级节点（幂等） */
+function fillStocks(l3node){
+  if(l3node.dataset.filled === '1') return;
+  const code = l3node.dataset.code;
+  const q = term.trim();
+  const hits = matchCount();
+  const list = stocksOfL3(code, q, hits);
+  const body = l3node.querySelector('.l3-body');
+  if(!body) return;
+  body.innerHTML = list.length
+    ? '<div class="stocks">' + list.map(s =>
+        `<button class="stock" data-code="${s.code}" data-name="${esc(s.name)}">
+          <span class="stock-code">${s.code}</span>
+          <span class="stock-name">${q?hl(s.name,q):esc(s.name)}</span>
+          <span class="ex">${s.ex==='1'?'SH':'SZ'}</span>
+        </button>`).join('') + '</div>'
+    : '<div class="stub-empty">该筛选条件下无股票</div>';
+  l3node.dataset.filled = '1';
+}
+
+/* 递归填充当前所有已展开的三级节点 */
+function fillOpenL3(){
+  document.querySelectorAll('.l3[data-open="1"]').forEach(fillStocks);
 }
 
 function renderTree(){
   const box = document.getElementById('tree');
   const q = term.trim();
   const hits = matchCount();
+  const autoOpen = (q || hits) ? '1' : '0';
 
   const html = TREE.map(l1 => {
     const l2html = l1.l2.map(l2 => {
       const l3html = l2.l3.map(l3 => {
-        let list = (STOCKS[l3.c] || []).map(str => {
-          const [code, name, ex] = str.split('|');
-          return {code, name, ex};
-        });
-        if(exFilter!=='all') list = list.filter(s => s.ex===exFilter);
-        if(hits) list = list.filter(s => hits.has(s.code));
-        if(!list.length) return '';
-        const stocks = list.map(s =>
-          `<button class="stock" data-code="${s.code}" data-name="${esc(s.name)}">
-            <span class="stock-code">${s.code}</span>
-            <span class="stock-name">${q?hl(s.name,q):esc(s.name)}</span>
-            <span class="ex">${s.ex==='1'?'SH':'SZ'}</span>
-          </button>`).join('');
-        return `<div class="l3" data-open="${q||hits?'1':'0'}">
-          <button class="l3-head" data-toggle>
+        const cnt = countL3(l3.c, hits);
+        if(!cnt) return '';
+        return `<div class="l3" data-open="${autoOpen}" data-code="${l3.c}">
+          <button class="l3-head" data-toggle aria-expanded="${autoOpen==='1'}">
             <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
             <span class="l3-name">${q?hl(l3.n,q):esc(l3.n)}</span>
             <span class="tag-l3">三级</span>
             <span class="flow-btn" data-flow="l3" data-code="${l3.c}" data-name="${esc(l3.n)}" title="查看行业资金流">资金流</span>
-            <span class="count">${list.length} 只</span>
+            <span class="count">${cnt} 只</span>
           </button>
-          <div class="l3-body"><div class="stocks">${stocks}</div></div>
+          <div class="l3-body"></div>
         </div>`;
       }).join('');
 
       if(!l3html) return '';
-      const l2cnt = l2.l3.reduce((s,l3)=>{
-        const _a = STOCKS[l3.c] || [];
-        let n = _a.length;
-        if(exFilter!=='all') n = _a.filter(x=>x.split('|')[2]===exFilter).length;
-        return s+n;
-      },0);
-      const shownCnt = hits ? 
-        l2.l3.reduce((s,l3)=>s+(STOCKS[l3.c]||[]).filter(x=>hits.has(x.split('|')[0])).length,0) : l2cnt;
+      const l2cnt = l2.l3.reduce((s,l3)=>s+countL3(l3.c, hits),0);
+      if(!l2cnt) return '';
 
-      return `<div class="l2" data-open="${q||hits?'1':'0'}">
-        <button class="l2-head" data-toggle>
+      return `<div class="l2" data-open="${autoOpen}">
+        <button class="l2-head" data-toggle aria-expanded="${autoOpen==='1'}">
           <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
           <span class="l2-name">${q?hl(l2.n,q):esc(l2.n)}</span>
           <span class="l2-code">${l2.c}</span>
           <span class="flow-btn" data-flow="l2" data-code="${l2.c}" data-name="${esc(l2.n)}" title="查看行业资金流">资金流</span>
-          <span class="count">${shownCnt} 只</span>
+          <span class="count">${l2cnt} 只</span>
         </button>
         <div class="l2-body">${l3html}</div>
       </div>`;
     }).join('');
 
     if(!l2html) return '';
-    const cnt = hits ? hits.size : (
-      exFilter==='all' ? l1.l2.reduce((s,l2)=>s+l2.l3.reduce((t,l3)=>t+(STOCKS[l3.c]||[]).length,0),0)
-        : l1.l2.reduce((s,l2)=>s+l2.l3.reduce((t,l3)=>t+(STOCKS[l3.c]||[]).filter(x=>x.split('|')[2]===exFilter).length,0),0)
-    );
-    return `<div class="l1" data-open="${q||hits?'1':'0'}">
-      <button class="l1-head" data-toggle>
+    const cnt = hits ? hits.codes.size
+      : l1.l2.reduce((s,l2)=>s+l2.l3.reduce((t,l3)=>t+countL3(l3.c, null),0),0);
+
+    return `<div class="l1" data-open="${autoOpen}">
+      <button class="l1-head" data-toggle aria-expanded="${autoOpen==='1'}">
         <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
         <span class="l1-name">${q?hl(l1.n,q):esc(l1.n)}</span>
         <span class="l1-code">${l1.c}</span>
@@ -443,8 +542,11 @@ function renderTree(){
 
   box.innerHTML = html || '<div class="empty">没有匹配的股票或行业</div>';
   document.getElementById('statLine').innerHTML =
-    hits ? `匹配 <b>${hits.size}</b> 只股票`
+    hits ? `匹配 <b>${hits.codes.size}</b> 只股票`
          : `<b>${TOTAL.l1}</b> 一级 · <b>${TOTAL.l2}</b> 二级 · <b>${TOTAL.l3}</b> 三级 · <b>${TOTAL.st}</b> 只股票`;
+
+  // 展开的节点立即填充股票
+  fillOpenL3();
 }
 
 /* ═══════════ 图表 ═══════════ */
@@ -562,6 +664,7 @@ function openIndustry(level, code, name){
         : `<span>${parent.l1}</span><span style="color:var(--text-dim)">›</span><span>${parent.l2}</span>`);
 
   renderIndustryBody();
+  _lastFocus = document.activeElement;
   document.getElementById('drawer').classList.add('open');
   document.getElementById('scrim').classList.add('open');
   document.getElementById('dClose').focus();
@@ -597,6 +700,7 @@ function renderIndustryBody(){
     `<button data-days="${n}" aria-pressed="${days===n}">${label}</button>`).join('');
 
   document.getElementById('dBody').innerHTML = `
+    <div class="data-note">⚠️<b>模拟数据</b>　以下资金流数值为演示生成，非真实行情，不可用于投资决策。</div>
     <div class="range-bar">
       <span class="lbl">时间范围</span>
       <div class="seg" id="rangeSegI">${rangeBtns}</div>
@@ -610,6 +714,8 @@ function renderIndustryBody(){
       <div class="sum-c"><div class="sum-l">累计峰值 / 谷值</div><div class="sum-v" style="font-size:15px"><span class="up">${yi(maxCum)}</span> <span style="color:var(--text-dim)">/</span> <span class="down">${yi(minCum)}</span></div></div>
     </div>
 
+    ${metricBlock(metrics(series), days)}
+
     ${chartHtml(series, days)}
 
     <div class="sec-t">成分股区间净流入排行（前 ${topN.length} / ${comp.length} 只）</div>
@@ -617,6 +723,85 @@ function renderIndustryBody(){
   `;
   bindChart(series);
 }
+/* 计算专业指标：连续性、波动率、强度、趋势 */
+function metrics(data, amountBase){
+  const n = data.length;
+  if(!n) return null;
+  const net = data.reduce((s,d)=>s+d.v,0);
+  const inflow = data.filter(d=>d.v>0).length;
+  const outflow = n - inflow;
+  const avg = net / n;
+  const variance = data.reduce((s,d)=>s+Math.pow(d.v-avg,2),0) / n;
+  const sd = Math.sqrt(variance);
+
+  // 最大连续净流入 / 净流出天数
+  let maxIn = 0, maxOut = 0, curIn = 0, curOut = 0;
+  data.forEach(d=>{
+    if(d.v > 0){ curIn++; curOut = 0; } else { curOut++; curIn = 0; }
+    if(curIn > maxIn) maxIn = curIn;
+    if(curOut > maxOut) maxOut = curOut;
+  });
+
+  // 当前连续状态（从最新往前数）
+  let streak = 0, streakDir = 0;
+  for(let i = n-1; i >= 0; i--){
+    const dir = data[i].v > 0 ? 1 : -1;
+    if(streakDir === 0){ streakDir = dir; streak = 1; }
+    else if(dir === streakDir) streak++;
+    else break;
+  }
+
+  // 近 5 日 vs 全区间（动能）
+  const last5 = data.slice(-5).reduce((s,d)=>s+d.v,0);
+  const prev5 = data.slice(-10,-5).reduce((s,d)=>s+d.v,0);
+  const momentum = last5 - prev5;
+
+  // 强度：净流入 / 成交额（amountBase 为区间成交额估算）
+  const strength = amountBase ? net / amountBase : null;
+
+  return {
+    net, inflow, outflow, avg, sd, maxIn, maxOut, streak, streakDir,
+    last5, momentum, strength,
+    winRate: inflow / n,
+    vol: sd / (Math.abs(avg) || 1)
+  };
+}
+
+function metricBlock(m, days){
+  if(!m) return '';
+  const lbl = days<=20?'近1月':(days<=60?'近3月':(days<=120?'近6月':'近1年'));
+  const streakTxt = m.streakDir > 0
+    ? `<span class="up">连续 ${m.streak} 天净流入</span>`
+    : `<span class="down">连续 ${m.streak} 天净流出</span>`;
+  const momCls = m.momentum > 0 ? 'up' : 'down';
+
+  return `
+    <div class="metric-grid">
+      <div class="metric">
+        <div class="metric-l">净流入天数占比</div>
+        <div class="metric-v">${(m.winRate*100).toFixed(1)}<span class="unit">%</span></div>
+        <div class="metric-bar"><i style="width:${(m.winRate*100).toFixed(1)}%;background:var(--up)"></i></div>
+      </div>
+      <div class="metric">
+        <div class="metric-l">当前状态</div>
+        <div class="metric-v" style="font-size:15px">${streakTxt}</div>
+        <div class="metric-sub">最长连续流入 ${m.maxIn} 天 / 流出 ${m.maxOut} 天</div>
+      </div>
+      <div class="metric">
+        <div class="metric-l">日均净流入</div>
+        <div class="metric-v ${cls(m.avg)}">${yi(m.avg)}</div>
+        <div class="metric-sub">波动率 ${(m.vol*100).toFixed(0)}%</div>
+      </div>
+      <div class="metric">
+        <div class="metric-l">近 5 日动能</div>
+        <div class="metric-v ${momCls}">${yi(m.momentum)}</div>
+        <div class="metric-sub">较前 5 日的增减</div>
+      </div>
+    </div>
+    <div class="metric-note">上述指标基于 ${lbl}（${days} 个交易日）区间计算</div>
+  `;
+}
+
 /* ═══════════ 抽屉 ═══════════ */
 function openStock(code, name){
   curIndustry = null;
@@ -634,6 +819,7 @@ function openStock(code, name){
      <span>${s.l3}</span>`;
 
   renderBody();
+  _lastFocus = document.activeElement;
   document.getElementById('drawer').classList.add('open');
   document.getElementById('scrim').classList.add('open');
   document.getElementById('dClose').focus();
@@ -653,6 +839,7 @@ function renderBody(){
     `<button data-days="${n}" aria-pressed="${cur.days===n}">${label}</button>`).join('');
 
   document.getElementById('dBody').innerHTML = `
+    <div class="data-note">⚠️<b>模拟数据</b>　以下资金流数值为演示生成，非真实行情，不可用于投资决策。</div>
     <div class="range-bar">
       <span class="lbl">时间范围</span>
       <div class="seg" id="rangeSeg">${rangeBtns}</div>
@@ -665,6 +852,8 @@ function renderBody(){
       <div class="sum-c"><div class="sum-l">单日最大净流入</div><div class="sum-v ${cls(best.v)}">${yi(best.v)}</div></div>
       <div class="sum-c"><div class="sum-l">累计峰值 / 谷值</div><div class="sum-v" style="font-size:15px"><span class="up">${yi(maxCum)}</span> <span style="color:var(--text-dim)">/</span> <span class="down">${yi(minCum)}</span></div></div>
     </div>
+
+    ${metricBlock(metrics(data), cur.days)}
 
     ${chartHtml(data, cur.days)}
 
@@ -699,11 +888,47 @@ function bindChart(series){
     r.addEventListener('mouseleave', ()=>tip.classList.remove('on'));
   });
 }
+let _lastFocus = null;
 function closeDrawer(){
   curIndustry = null;
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('scrim').classList.remove('open');
   document.getElementById('tip').classList.remove('on');
+  if(_lastFocus && _lastFocus.isConnected) _lastFocus.focus();
+  _lastFocus = null;
+}
+
+/* 焦点陷阱：抽屉打开时 Tab 循环限制在抽屉内 */
+function trapFocus(e){
+  if(e.key !== 'Tab') return;
+  const drawer = document.getElementById('drawer');
+  if(!drawer.classList.contains('open')) return;
+  const focusables = [...drawer.querySelectorAll(
+    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  )].filter(el => el.offsetParent !== null);
+  if(!focusables.length) return;
+  const first = focusables[0], last = focusables[focusables.length-1];
+  if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+  else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+}
+
+/* Escape 关闭 + 树内键盘导航 */
+function treeKeydown(e){
+  if(e.key === 'Escape'){ closeDrawer(); return; }
+  const head = e.target.closest && e.target.closest('[data-toggle]');
+  if(!head) return;
+  const node = head.parentElement;
+  const heads = [...document.querySelectorAll('.l1-head, .l2-head, .l3-head')]
+    .filter(h => h.offsetParent !== null);
+  const idx = heads.indexOf(head);
+  if(e.key === 'ArrowDown'){ e.preventDefault(); heads[Math.min(idx+1, heads.length-1)]?.focus(); }
+  else if(e.key === 'ArrowUp'){ e.preventDefault(); heads[Math.max(idx-1, 0)]?.focus(); }
+  else if(e.key === 'ArrowRight'){ e.preventDefault(); if(node.dataset.open !== '1') head.click(); }
+  else if(e.key === 'ArrowLeft'){
+    e.preventDefault();
+    if(node.dataset.open === '1') head.click();
+    else node.parentElement?.querySelector(':scope > [data-toggle]')?.focus();
+  }
 }
 
 /* 树事件委托 */
@@ -719,7 +944,14 @@ document.getElementById('tree').addEventListener('click', e=>{
   const head = e.target.closest('[data-toggle]');
   if(head){
     const node = head.parentElement;
-    node.dataset.open = node.dataset.open==='1' ? '0' : '1';
+    const open = node.dataset.open !== '1';
+    node.dataset.open = open ? '1' : '0';
+    head.setAttribute('aria-expanded', String(open));
+    if(open){
+      // 自身若是三级节点，直接填充；否则填充其后代三级节点
+      if(node.classList.contains('l3')) fillStocks(node);
+      node.querySelectorAll('.l3[data-open="1"]').forEach(fillStocks);
+    }
   }
 });
 
@@ -737,7 +969,8 @@ document.getElementById('dBody').addEventListener('click', e=>{
 
 document.getElementById('dClose').addEventListener('click', closeDrawer);
 document.getElementById('scrim').addEventListener('click', closeDrawer);
-document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeDrawer(); });
+document.addEventListener('keydown', trapFocus);
+document.addEventListener('keydown', treeKeydown);
 
 /* 搜索 */
 let tq;
@@ -755,11 +988,25 @@ document.getElementById('exSeg').addEventListener('click', e=>{
 });
 
 /* 展收 */
+/* 展开当前（第一个已展开的，或第一个）一级行业 —— 避免整页变成 46 屏 */
 document.getElementById('expandAll').addEventListener('click', ()=>{
-  document.querySelectorAll('.l1,.l2,.l3').forEach(n=>n.dataset.open='1');
+  const all = [...document.querySelectorAll('.l1')];
+  const target = all.find(n=>n.dataset.open==='1') || all[0];
+  if(!target) return;
+  target.dataset.open = '1';
+  target.querySelector('.l1-head')?.setAttribute('aria-expanded','true');
+  target.querySelectorAll('.l2,.l3').forEach(n=>n.dataset.open='1');
+  target.querySelectorAll('.l2-head,.l3-head').forEach(n=>n.setAttribute('aria-expanded','true'));
+  target.querySelectorAll('.l3[data-open="1"]').forEach(fillStocks);
+  target.scrollIntoView({block:'start', behavior:'smooth'});
 });
 document.getElementById('collapseAll').addEventListener('click', ()=>{
-  document.querySelectorAll('.l1,.l2,.l3').forEach(n=>n.dataset.open='0');
+  document.querySelectorAll('.l1,.l2,.l3').forEach(n=>{
+    n.dataset.open='0';
+    n.querySelector('[data-toggle]')?.setAttribute('aria-expanded','false');
+  });
+  document.querySelectorAll('.l3-body').forEach(b=>b.innerHTML='');
+  document.querySelectorAll('.l3').forEach(n=>n.dataset.filled='0');
 });
 
 /* ═══════════ 启动 ═══════════ */
@@ -770,6 +1017,32 @@ document.getElementById('collapseAll').addEventListener('click', ()=>{
 
   ensureStocks().then(()=>{
     renderTree();
+    // P2-2 从看板跳转过来：自动定位并展开对应行业
+    const p = new URLSearchParams(location.search);
+    const indCode = p.get('ind');
+    if(indCode){
+      const node = [...document.querySelectorAll('.l1,.l2,.l3')].find(n=>
+        n.querySelector('[data-flow]')?.dataset.code === indCode &&
+        n !== document.querySelector('.l1')
+      );
+      if(node){
+        // 展开其所有祖先
+        let cur = node;
+        while(cur && cur.classList.contains !== undefined){
+          if(cur.classList.contains('l1') || cur.classList.contains('l2') || cur.classList.contains('l3')){
+            cur.dataset.open = '1';
+            cur.querySelector(':scope > [data-toggle]')?.setAttribute('aria-expanded','true');
+          }
+          cur = cur.parentElement;
+          if(cur && (cur.id === 'tree' || cur.tagName === 'BODY')) break;
+        }
+        node.querySelectorAll('.l3').forEach(n=>{ n.dataset.open='1'; fillStocks(n); });
+        setTimeout(()=>{
+          node.scrollIntoView({block:'center', behavior:'smooth'});
+          node.querySelector(':scope > [data-toggle]')?.focus();
+        }, 200);
+      }
+    }
   }).catch(err=>{
     tree.innerHTML = '<div class="empty">' +
       '数据加载失败：' + err.message + '<br><br>' +
