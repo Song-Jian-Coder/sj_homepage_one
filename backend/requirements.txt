@@ -1,0 +1,10 @@
+# 运行时依赖（ETL + API）
+requests
+pymysql
+python-dotenv
+fastapi
+uvicorn[standard]
+
+# 测试依赖
+pytest
+httpx

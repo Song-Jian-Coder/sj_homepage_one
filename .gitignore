@@ -1,0 +1,15 @@
+# 密钥与环境（绝不提交真实 .env）
+.env
+.env.local
+
+# 日志
+*.log
+etl_run.log
+
+# Python
+__pycache__/
+*.pyc
+
+# 备份 / 临时文件
+*.mock.bak
+_backup_*/
