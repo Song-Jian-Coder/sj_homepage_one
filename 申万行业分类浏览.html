@@ -171,6 +171,22 @@ svg.chart{display:block;width:100%;overflow:visible}
 .comp-code{font-family:var(--mono);font-size:11.5px;color:var(--text-dim);flex:none}
 .comp-name{font-size:12.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .comp-val{font-family:var(--mono);font-size:12.5px;font-weight:500;flex:none}
+/* P2 排名对比样式 */
+.metric-wide{grid-column:1 / -1}
+.rank-wrap{display:flex;align-items:center;gap:16px}
+.rank-no{font-family:var(--mono);font-size:26px;font-weight:600;letter-spacing:-.035em;line-height:1;flex:none}
+.rank-no .unit{font-size:13px;color:var(--text-dim);font-weight:400;letter-spacing:0}
+.rank-no.up{color:var(--up)} .rank-no.down{color:var(--down)}
+.rank-bar-wrap{flex:1;min-width:0}
+.rank-bar{height:6px;border-radius:100px;background:var(--surface-2);overflow:hidden;margin-bottom:5px}
+.rank-bar i{display:block;height:100%;border-radius:100px;transition:width .4s var(--ease)}
+@media (max-width:520px){
+  .metric-grid{grid-template-columns:1fr}
+  .metric-wide{grid-column:auto}
+  .rank-wrap{flex-direction:column;align-items:flex-start;gap:10px}
+  .rank-bar-wrap{width:100%}
+}
+
 .metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);
   border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:8px}
 .metric{background:var(--surface);padding:13px 15px}
@@ -242,6 +258,22 @@ footer{border-top:1px solid var(--border);padding:22px 0;font-size:12px;color:va
 .comp-code{font-family:var(--mono);font-size:11.5px;color:var(--text-dim);flex:none}
 .comp-name{font-size:12.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .comp-val{font-family:var(--mono);font-size:12.5px;font-weight:500;flex:none}
+/* P2 排名对比样式 */
+.metric-wide{grid-column:1 / -1}
+.rank-wrap{display:flex;align-items:center;gap:16px}
+.rank-no{font-family:var(--mono);font-size:26px;font-weight:600;letter-spacing:-.035em;line-height:1;flex:none}
+.rank-no .unit{font-size:13px;color:var(--text-dim);font-weight:400;letter-spacing:0}
+.rank-no.up{color:var(--up)} .rank-no.down{color:var(--down)}
+.rank-bar-wrap{flex:1;min-width:0}
+.rank-bar{height:6px;border-radius:100px;background:var(--surface-2);overflow:hidden;margin-bottom:5px}
+.rank-bar i{display:block;height:100%;border-radius:100px;transition:width .4s var(--ease)}
+@media (max-width:520px){
+  .metric-grid{grid-template-columns:1fr}
+  .metric-wide{grid-column:auto}
+  .rank-wrap{flex-direction:column;align-items:flex-start;gap:10px}
+  .rank-bar-wrap{width:100%}
+}
+
 .metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);
   border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:8px}
 .metric{background:var(--surface);padding:13px 15px}
@@ -392,6 +424,7 @@ function genSeries(code, name, days){
 
 /* ═══════════ 工具 ═══════════ */
 const yi = v => (v>=0?'+':'') + v.toFixed(2) + '亿';
+const fmtAmt = v => (v>=0?'+':'') + v.toFixed(1);
 const cls = v => v>0.005?'up':(v<-0.005?'down':'flat');
 const exName = e => e==='1'?'上交所':'深交所';
 const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -714,7 +747,7 @@ function renderIndustryBody(){
       <div class="sum-c"><div class="sum-l">累计峰值 / 谷值</div><div class="sum-v" style="font-size:15px"><span class="up">${yi(maxCum)}</span> <span style="color:var(--text-dim)">/</span> <span class="down">${yi(minCum)}</span></div></div>
     </div>
 
-    ${metricBlock(metrics(series), days)}
+    ${metricBlock(metrics(series, curIndustry.comp.reduce((a,c)=>a+amountBaseOf(c.code,c.name,days),0)), days, {isIndustry:true, code:curIndustry.code})}
 
     ${chartHtml(series, days)}
 
@@ -724,6 +757,16 @@ function renderIndustryBody(){
   bindChart(series);
 }
 /* 计算专业指标：连续性、波动率、强度、趋势 */
+/* 估算个股/行业的日均成交额基准（亿元）—— 用于计算相对强度 */
+function amountBaseOf(code, name, days){
+  const r = mulberry(seedOf(code + '|amt'));
+  const big = /^(贵州茅台|宁德时代|中国平安|招商银行|五粮液|比亚迪|隆基绿能|美的集团|长江电力|紫金矿业|中国石油|工商银行|农业银行|中国银行|中远海控|京沪高铁|恒瑞医药|海康威视|立讯精密|万华化学|东方财富)/.test(name);
+  // 日均成交额：大盘股 15-60 亿，中小盘 0.5-8 亿
+  const daily = big ? (15 + r()*45) : (0.5 + r()*7.5);
+  return daily * days;
+}
+
+/* 计算专业指标：连续性、波动率、强度、趋势加速度 */
 function metrics(data, amountBase){
   const n = data.length;
   if(!n) return null;
@@ -751,29 +794,110 @@ function metrics(data, amountBase){
     else break;
   }
 
-  // 近 5 日 vs 全区间（动能）
+  // 动能：近 5 日 vs 前 5 日
   const last5 = data.slice(-5).reduce((s,d)=>s+d.v,0);
   const prev5 = data.slice(-10,-5).reduce((s,d)=>s+d.v,0);
   const momentum = last5 - prev5;
 
-  // 强度：净流入 / 成交额（amountBase 为区间成交额估算）
+  // P2 新增：趋势加速度 —— 比较后半段与前半段的日均
+  const half = Math.floor(n/2);
+  const firstHalfAvg = half ? data.slice(0, half).reduce((s,d)=>s+d.v,0) / half : 0;
+  const secondHalfAvg = (n-half) ? data.slice(half).reduce((s,d)=>s+d.v,0) / (n-half) : 0;
+  const accel = secondHalfAvg - firstHalfAvg;
+
+  // P2 新增：累计曲线斜率（线性回归，单位：亿元/日）
+  let sx=0, sy=0, sxy=0, sxx=0;
+  data.forEach((d,i)=>{ sx+=i; sy+=d.cum; sxy+=i*d.cum; sxx+=i*i; });
+  const denom = n*sxx - sx*sx;
+  const slope = denom ? (n*sxy - sx*sy) / denom : 0;
+
+  // P2 新增：相对强度 = 净流入 / 区间成交额
   const strength = amountBase ? net / amountBase : null;
+
+  // P2 新增：净流入占成交额比（百分比形式，更直观）
+  const strengthPct = (strength !== null) ? strength * 100 : null;
+
+  // 最大回撤（累计曲线）
+  let peak = -Infinity, maxDD = 0;
+  data.forEach(d=>{
+    if(d.cum > peak) peak = d.cum;
+    const dd = peak - d.cum;
+    if(dd > maxDD) maxDD = dd;
+  });
 
   return {
     net, inflow, outflow, avg, sd, maxIn, maxOut, streak, streakDir,
-    last5, momentum, strength,
+    last5, momentum, strength, strengthPct, accel, slope, maxDD,
     winRate: inflow / n,
     vol: sd / (Math.abs(avg) || 1)
   };
 }
 
-function metricBlock(m, days){
+/* 计算某指标在全体样本中的百分位排名（0-100） */
+function percentileRank(value, allValues){
+  if(!allValues || !allValues.length) return null;
+  const sorted = [...allValues].sort((a,b)=>a-b);
+  let lo = 0, hi = sorted.length;
+  while(lo < hi){ const mid = (lo+hi)>>1; if(sorted[mid] < value) lo = mid+1; else hi = mid; }
+  return lo / sorted.length * 100;
+}
+
+/* 全市场二级行业强度排名（用于对比） */
+/* 全市场强度排名：按时间范围分键缓存，避免重复聚合 */
+const _rankCache = new Map();
+function marketRank(){
+  const d = period1Days();
+  if(_rankCache.has(d)) return _rankCache.get(d);
+  const map = new Map();
+  ALL_L2.forEach(l2 => {
+    const comp = stocksOf('l2', l2.code);
+    if(!comp.length) return;
+    const series = aggregate(comp, d);
+    const net = series.reduce((s,x)=>s+x.v,0);
+    let amt = 0;
+    comp.forEach(c => { amt += amountBaseOf(c.code, c.name, d); });
+    if(amt > 0) map.set(l2.code, {name: l2.n, net, strength: net/amt});
+  });
+  _rankCache.set(d, map);
+  return map;
+}
+function period1Days(){ return cur.days || 120; }
+
+function metricBlock(m, days, opts){
   if(!m) return '';
   const lbl = days<=20?'近1月':(days<=60?'近3月':(days<=120?'近6月':'近1年'));
   const streakTxt = m.streakDir > 0
     ? `<span class="up">连续 ${m.streak} 天净流入</span>`
     : `<span class="down">连续 ${m.streak} 天净流出</span>`;
   const momCls = m.momentum > 0 ? 'up' : 'down';
+  const accelCls = m.accel > 0 ? 'up' : 'down';
+  const slopeCls = m.slope > 0 ? 'up' : 'down';
+
+  // P2 相对强度
+  const strengthHtml = m.strengthPct !== null
+    ? `<div class="metric-v ${cls(m.strengthPct)}">${m.strengthPct>=0?'+':''}${m.strengthPct.toFixed(2)}<span class="unit">%</span></div>
+       <div class="metric-sub">净流入 ÷ 区间成交额</div>`
+    : `<div class="metric-v flat" style="font-size:14px">—</div><div class="metric-sub">数据不足</div>`;
+
+  // P2 排名对比（仅行业层级）—— 先占位，异步填充以避免阻塞
+  let rankHtml = '';
+  if(opts && opts.isIndustry && opts.code){
+    const cached = _rankCache.get(period1Days());
+    if(cached){
+      rankHtml = rankBlockHtml(cached, opts.code);
+    } else {
+      rankHtml = `<div class="metric metric-wide" id="rankSlot">
+        <div class="metric-l">全市场强度排名</div>
+        <div class="metric-sub">正在计算…</div></div>`;
+      setTimeout(()=>{
+        const slot = document.getElementById('rankSlot');
+        if(!slot) return;
+        const rk = marketRank();
+        slot.outerHTML = rankBlockHtml(rk, opts.code) ||
+          '<div class="metric metric-wide"><div class="metric-l">全市场强度排名</div><div class="metric-sub">数据不足</div></div>';
+      }, 30);
+    }
+  }
 
   return `
     <div class="metric-grid">
@@ -788,6 +912,15 @@ function metricBlock(m, days){
         <div class="metric-sub">最长连续流入 ${m.maxIn} 天 / 流出 ${m.maxOut} 天</div>
       </div>
       <div class="metric">
+        <div class="metric-l">相对强度</div>
+        ${strengthHtml}
+      </div>
+      <div class="metric">
+        <div class="metric-l">趋势加速度</div>
+        <div class="metric-v ${accelCls}">${yi(m.accel)}</div>
+        <div class="metric-sub">后半段日均 − 前半段日均</div>
+      </div>
+      <div class="metric">
         <div class="metric-l">日均净流入</div>
         <div class="metric-v ${cls(m.avg)}">${yi(m.avg)}</div>
         <div class="metric-sub">波动率 ${(m.vol*100).toFixed(0)}%</div>
@@ -798,8 +931,32 @@ function metricBlock(m, days){
         <div class="metric-sub">较前 5 日的增减</div>
       </div>
     </div>
-    <div class="metric-note">上述指标基于 ${lbl}（${days} 个交易日）区间计算</div>
+    ${rankHtml}
+    <div class="metric-note">基于 ${lbl}（${days} 个交易日）计算 · 斜率 ${fmtAmt(m.slope)}亿/日 · 最大回撤 ${Math.abs(m.maxDD).toFixed(1)}亿</div>
   `;
+}
+
+function rankBlockHtml(rk, code){
+  const vals = [...rk.values()].map(v=>v.strength);
+  const self = rk.get(code);
+  if(!self || vals.length <= 5) return '';
+  const pr = percentileRank(self.strength, vals);
+  const rankNo = vals.filter(v=>v > self.strength).length + 1;
+  return `
+    <div class="metric metric-wide">
+      <div class="metric-l">全市场强度排名（共 ${vals.length} 个二级行业）</div>
+      <div class="rank-wrap">
+        <div class="rank-no ${percentileCls(pr)}">${rankNo}<span class="unit">/${vals.length}</span></div>
+        <div class="rank-bar-wrap">
+          <div class="rank-bar"><i style="width:${pr.toFixed(1)}%;background:${percentileColor(pr)}"></i></div>
+          <div class="metric-sub">强于 ${pr.toFixed(0)}% 的二级行业 · 按「净流入÷成交额」计算</div>
+        </div>
+      </div>
+    </div>`;
+}
+function percentileCls(p){ return p >= 66 ? 'up' : (p >= 33 ? '' : 'down'); }
+function percentileColor(p){
+  return p >= 66 ? 'var(--up)' : (p >= 33 ? 'var(--accent)' : 'var(--down)');
 }
 
 /* ═══════════ 抽屉 ═══════════ */
@@ -853,7 +1010,7 @@ function renderBody(){
       <div class="sum-c"><div class="sum-l">累计峰值 / 谷值</div><div class="sum-v" style="font-size:15px"><span class="up">${yi(maxCum)}</span> <span style="color:var(--text-dim)">/</span> <span class="down">${yi(minCum)}</span></div></div>
     </div>
 
-    ${metricBlock(metrics(data), cur.days)}
+    ${metricBlock(metrics(data, amountBaseOf(cur.code, cur.name, cur.days)), cur.days)}
 
     ${chartHtml(data, cur.days)}
 
@@ -877,6 +1034,7 @@ function bindChart(series){
   svg.querySelectorAll('#hitArea rect').forEach(r=>{
     r.addEventListener('mousemove', e=>{
       const i = +r.dataset.i, d = data[i];
+      if(!d) return;   // 数据已切换，旧监听器忽略
       tip.innerHTML = `<div class="tip-date">${d.d}</div>
         <div class="tip-row"><span style="color:var(--text-dim)">当日</span><span class="${cls(d.v)}">${yi(d.v)}</span></div>
         <div class="tip-row"><span style="color:var(--text-dim)">累计</span><span class="${cls(d.cum)}">${yi(d.cum)}</span></div>`;
@@ -1017,6 +1175,7 @@ document.getElementById('collapseAll').addEventListener('click', ()=>{
 
   ensureStocks().then(()=>{
     renderTree();
+
     // P2-2 从看板跳转过来：自动定位并展开对应行业
     const p = new URLSearchParams(location.search);
     const indCode = p.get('ind');
