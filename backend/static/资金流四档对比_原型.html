@@ -122,14 +122,34 @@ tr.total td{font-weight:600;border-top:1px solid var(--border-strong)}
 @media (max-width:520px){
   .defs{grid-template-columns:1fr}
 }
+
+/* ── 返回控制台 ── */
+.back-admin{
+  display:inline-flex;align-items:center;gap:6px;
+  height:32px;padding:0 12px;border-radius:6px;
+  border:1px solid var(--border);background:var(--surface);
+  font-size:12.5px;color:var(--text-muted);flex:none;
+  transition:all .16s cubic-bezier(.22,.61,.36,1);
+  text-decoration:none;white-space:nowrap;
+}
+.back-admin:hover{color:#c3c8f0;border-color:var(--accent-line);background:var(--accent-dim)}
+.back-admin svg{flex:none}
+@media (max-width:640px){ .back-admin span{display:none} .back-admin{padding:0 10px} }
+
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <header>
-    <h1>四档资金流对比<span class="badge real">真实数据 · 贵州茅台</span></h1>
-    <div class="sub">贵州茅台（600519.SH）· 白酒Ⅱ · 20260630 ~ 20260921 · 共 60 个交易日</div>
+  <header style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div>
+      <h1>四档资金流对比<span class="badge real">真实数据 · 贵州茅台</span></h1>
+      <div class="sub">贵州茅台（600519.SH）· 白酒Ⅱ · 20260630 ~ 20260921 · 共 60 个交易日</div>
+    </div>
+    <a class="back-admin" href="/admin.html" title="返回数据管理控制台">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg><span>控制台</span></a>
   </header>
 
   <!-- 定义 -->

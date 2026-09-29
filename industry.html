@@ -377,6 +377,50 @@ footer{border-top:1px solid var(--border);padding:22px 0;font-size:12px;color:va
 .tp-v{color:var(--text)}
 .tp-v em{font-family:var(--mono);font-style:normal;font-size:11px;color:var(--text-dim);margin-left:6px}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.001ms!important;animation-duration:.001ms!important}}
+
+/* ── 返回控制台 ── */
+.back-admin{
+  display:inline-flex;align-items:center;gap:6px;
+  height:32px;padding:0 12px;border-radius:6px;
+  border:1px solid var(--border);background:var(--surface);
+  font-size:12.5px;color:var(--text-muted);flex:none;
+  transition:all .16s cubic-bezier(.22,.61,.36,1);
+  text-decoration:none;white-space:nowrap;
+}
+.back-admin:hover{color:#c3c8f0;border-color:var(--accent-line);background:var(--accent-dim)}
+.back-admin svg{flex:none}
+@media (max-width:640px){ .back-admin span{display:none} .back-admin{padding:0 10px} }
+
+
+/* FIX: 关闭按钮不被标题遮挡 */
+.drawer-head{padding-right:64px}
+.drawer-title{padding-right:0;max-width:100%;overflow-wrap:anywhere}
+.drawer-close{z-index:5}
+@media (max-width:520px){ .drawer-head{padding-right:56px} }
+
+
+/* 数据状态条：成功绿 / 失败红 */
+.warn.ok{background:rgba(0,196,140,.08);border-color:rgba(0,196,140,.28);color:#7ddcb8}
+.warn.ok b{color:#4fd9b0}
+.warn.err{background:rgba(242,67,107,.09);border-color:rgba(242,67,107,.3);color:#f08ba6}
+.warn.err b{color:#f5a8bf}
+.warn #dataBarIcon{font-weight:700}
+
+
+/* 无当前成分提示 */
+.nomember{padding:30px 6px 10px;text-align:center}
+.nm-ico{width:44px;height:44px;border-radius:50%;margin:0 auto 16px;
+  display:grid;place-items:center;font-size:20px;
+  background:var(--accent-dim);border:1px solid var(--accent-line);color:#a9b0e0}
+.nm-t{font-size:15.5px;font-weight:600;margin-bottom:10px;letter-spacing:-.015em}
+.nm-d{font-size:13px;color:var(--text-muted);line-height:1.75;text-align:left;
+  max-width:400px;margin:0 auto}
+.nm-d ul{margin:10px 0;padding-left:18px}
+.nm-d li{margin:5px 0}
+.nm-d b{color:var(--text)}
+.nm-h{margin-top:20px;padding-top:16px;border-top:1px solid var(--border);
+  font-size:12px;color:var(--text-dim)}
+
 </style>
 </head>
 <body>
@@ -384,6 +428,7 @@ footer{border-top:1px solid var(--border);padding:22px 0;font-size:12px;color:va
   <div class="bar">
     <div class="brand"><span class="brand-mark">申</span><span>行业分类浏览</span></div>
     <div class="bar-spacer"></div>
+    <a class="back-admin" href="/admin.html" title="返回数据管理控制台"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span>控制台</span></a>
     <label class="search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
         <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
@@ -394,9 +439,9 @@ footer{border-top:1px solid var(--border);padding:22px 0;font-size:12px;color:va
 </header>
 
 <main>
-  <div class="warn">
-    <span>⚠️</span>
-    <span><b>界面演示版</b>　行业层级与成分股为真实申万分类（31 个一级 / 131 个二级 / 336 个三级 / 5218 只股票，2026-09-21 版）；<b>个股资金流为模拟数据</b>，用于确认交互与视觉。</span>
+  <div class="warn" id="dataBar">
+    <span id="dataBarIcon">✓</span>
+    <span id="dataBarText">正在获取数据状态…</span>
   </div>
 
   <div class="toolbar">
@@ -622,7 +667,7 @@ function fillStocks(l3node){
           <span class="stock-name">${q?hl(s.name,q):esc(s.name)}</span>
           <span class="ex">${s.ex==='1'?'SH':'SZ'}</span>
         </button>`).join('') + '</div>'
-    : '<div class="stub-empty">该筛选条件下无股票</div>';
+    : '<div class="stub-empty">' + ((term || exFilter!=='all') ? '该筛选条件下无股票' : '本行业无当前成分股') + '</div>';
   l3node.dataset.filled = '1';
 }
 
@@ -792,9 +837,41 @@ function aggregate(comp, days){
 
 let curIndustry = null;
 
+/* 无当前成分行业的提示（源端无数据 / 行业已废止，非系统缺失） */
+function showNoMember(level, code, name){
+  const lv = level==='l1' ? '一级' : (level==='l2' ? '二级' : '三级');
+  const box = document.getElementById('dBody');
+  const ttl = document.getElementById('dTitle');
+  const meta = document.getElementById('dMeta');
+  if(!box) return;
+
+  ttl.textContent = name;
+  meta.innerHTML = '<span class="num">' + code + '</span><span>' + lv + '行业</span>';
+  const qb = document.getElementById('quadBtn'); if(qb) qb.hidden = true;
+
+  box.innerHTML =
+    '<div class="nomember">' +
+      '<div class="nm-ico">ⓘ</div>' +
+      '<div class="nm-t">该行业无当前成分</div>' +
+      '<div class="nm-d">' +
+        '申万分类中该' + lv + '行业目前没有归属的上市公司，通常属于下列情形：' +
+        '<ul>' +
+          '<li><b>源端无数据</b> —— 申万分类保留该行业代码，但暂无股票划入</li>' +
+          '<li><b>行业已废止</b> —— 该行业在新版分类中已被合并或撤销</li>' +
+        '</ul>' +
+        '这不代表系统数据缺失。' +
+      '</div>' +
+      '<div class="nm-h">可查看同级的其他行业，或返回上级浏览</div>' +
+    '</div>';
+
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('scrim').classList.add('open');
+  document.getElementById('dClose').focus();
+}
+
 function openIndustry(level, code, name){
   const comp = stocksOf(level, code);
-  if(!comp.length) return;
+  if(!comp.length){ showNoMember(level, code, name); return; }
   curIndustry = {level, code, name, comp};
   const lvName = level==='l1' ? '一级行业' : (level==='l2' ? '二级行业' : '三级行业');
   const parent = comp[0];
@@ -1850,8 +1927,37 @@ async function openQuad(code, name){
 }
 
 /* ── 预热元数据 + 全市场强度 ── */
+/* 数据状态条：依据真实 API 结果渲染，数字全部来自 /meta */
+function renderDataBar(ok, meta){
+  const bar = document.getElementById('dataBar');
+  const ico = document.getElementById('dataBarIcon');
+  const txt = document.getElementById('dataBarText');
+  if(!bar) return;
+
+  if(ok && meta){
+    const range = (meta.dataStart && meta.dataEnd)
+      ? (meta.dataStart + ' ~ ' + meta.dataEnd)
+      : (meta.dataEnd || '—');
+    bar.className = 'warn ok';
+    ico.textContent = '✓';
+    /* 只陈述资金流数据日期，不列行业数量
+       （行业树使用页面内嵌快照，与后端分类存在少量差异，列数量会造成矛盾） */
+    txt.innerHTML = '<b>真实数据</b>　资金流数据日期 <span class="num">' +
+      (meta.dataEnd || '—') + '</span>' +
+      '　·　数据区间 ' + range +
+      '　·　数据源 Tushare 兼容代理';
+  } else {
+    bar.className = 'warn err';
+    ico.textContent = '⚠';
+    txt.innerHTML = '<b>后端未连接</b>　未能获取 /api/v1/meta，' +
+      '个股资金流不可用。请确认后端已在 <span class="num">127.0.0.1:8000</span> 启动。';
+  }
+}
+
 (function(){
-  apiGet('/api/v1/meta').then(d => { if(d.dataEnd) DATA_DATE = d.dataEnd; }).catch(()=>{});
+  apiGet('/api/v1/meta')
+    .then(d => { if(d && d.dataEnd) DATA_DATE = d.dataEnd; renderDataBar(true, d); })
+    .catch(()=>{ renderDataBar(false); });
   apiGet('/api/v1/strength').then(res => {
     (res.list || []).forEach(x => _rankMap.map.set(x.swCode, {name:x.name, net:x.net, strength:x.strength}));
   }).catch(()=>{});

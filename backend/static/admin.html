@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数据管理控制台 · 申万行业资金流</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0b0d; --bg-elev:#101114; --surface:#16181c; --surface-2:#1c1f24; --surface-3:#23272d;
+  --border:#23262c; --border-strong:#2f333a;
+  --text:#e8eaed; --text-muted:#8b9199; --text-dim:#5f666e;
+  --ok:#00c48c; --ok-dim:rgba(0,196,140,.12); --ok-line:rgba(0,196,140,.3);
+  --warn:#f5a524; --warn-dim:rgba(245,165,36,.12); --warn-line:rgba(245,165,36,.3);
+  --err:#f2436b; --err-dim:rgba(242,67,107,.12); --err-line:rgba(242,67,107,.3);
+  --accent:#5e6ad2; --accent-dim:rgba(94,106,210,.12); --accent-line:rgba(94,106,210,.35);
+  --font:'Inter','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+  --mono:'JetBrains Mono',Consolas,monospace;
+  --r-sm:6px; --r:10px; --r-lg:14px;
+  --ease:cubic-bezier(.22,.61,.36,1);
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+  font-size:14px;line-height:1.55;letter-spacing:-.006em;-webkit-font-smoothing:antialiased}
+::selection{background:var(--accent);color:#fff}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+a{color:inherit;text-decoration:none}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+.wrap{max-width:1080px;margin:0 auto;padding:24px 20px 60px}
+
+/* ── 顶栏 ── */
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding-bottom:20px;margin-bottom:24px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:30px;height:30px;border-radius:8px;background:var(--accent);
+  display:grid;place-items:center;font-size:13px;font-weight:700;color:#fff;flex:none}
+.brand-t{font-size:16px;font-weight:600;letter-spacing:-.02em}
+.brand-s{font-size:12px;color:var(--text-dim);margin-top:2px}
+.env-tag{font-size:11px;padding:3px 9px;border-radius:100px;
+  background:var(--warn-dim);border:1px solid var(--warn-line);color:#e0b775}
+
+/* ── 卡片 ── */
+.card{background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--r-lg);
+  margin-bottom:18px;overflow:hidden}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:15px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.card-title{font-size:14px;font-weight:600;letter-spacing:-.015em}
+.card-sub{font-size:11.5px;color:var(--text-dim);margin-top:3px;font-weight:400}
+.card-body{padding:20px}
+
+/* ── 状态网格 ── */
+.status-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+  background:var(--border);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.st{background:var(--bg-elev);padding:15px 17px}
+.st-l{font-size:11.5px;color:var(--text-dim);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.st-v{font-family:var(--mono);font-size:20px;font-weight:600;letter-spacing:-.03em;line-height:1.2}
+.st-s{font-size:11.5px;color:var(--text-dim);margin-top:5px}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.dot.ok{background:var(--ok);box-shadow:0 0 0 3px var(--ok-dim)}
+.dot.err{background:var(--err);box-shadow:0 0 0 3px var(--err-dim)}
+.dot.warn{background:var(--warn);box-shadow:0 0 0 3px var(--warn-dim)}
+.dot.idle{background:var(--text-dim)}
+.pulse{animation:pulse 1.6s var(--ease) infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── 按钮 ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  height:42px;padding:0 20px;border-radius:var(--r-sm);font-size:14px;font-weight:500;
+  border:1px solid transparent;transition:all .16s var(--ease);white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover:not(:disabled){background:#6b76da}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-ghost{border-color:var(--border-strong);background:var(--surface);color:var(--text)}
+.btn-ghost:hover{border-color:#3a3d43;background:var(--surface-2)}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.btn-sm{height:34px;padding:0 14px;font-size:13px}
+
+/* ── 更新区 ── */
+.run-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.run-hint{font-size:12.5px;color:var(--text-dim);flex:1;min-width:200px;line-height:1.6}
+
+/* 进度 */
+.progress{display:none;margin-top:18px}
+.progress.on{display:block}
+.pg-head{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  font-size:12.5px;margin-bottom:9px}
+.pg-status{color:var(--text-muted);display:flex;align-items:center;gap:7px}
+.pg-timer{font-family:var(--mono);color:var(--text-dim)}
+.pg-track{height:5px;border-radius:100px;background:var(--surface-2);overflow:hidden;position:relative}
+.pg-bar{height:100%;border-radius:100px;background:var(--accent);width:0%;
+  transition:width .5s var(--ease)}
+.pg-bar.indet{width:35%;animation:indet 1.5s var(--ease) infinite}
+@keyframes indet{0%{margin-left:-35%}100%{margin-left:100%}}
+.log-box{margin-top:14px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-sm);padding:12px 14px;max-height:220px;overflow-y:auto;
+  font-family:var(--mono);font-size:11.5px;line-height:1.85;color:var(--text-muted)}
+.log-line{white-space:pre-wrap;word-break:break-all}
+.log-line .t{color:var(--text-dim)}
+.log-line.hl{color:var(--ok)}
+.log-line.warn{color:var(--warn)}
+.log-line.err{color:var(--err)}
+
+/* ── 快捷入口 ── */
+.entries{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.entry{display:flex;flex-direction:column;gap:10px;padding:18px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--r);transition:all .18s var(--ease)}
+.entry:hover{border-color:var(--accent-line);background:var(--surface-2);transform:translateY(-2px)}
+.entry-ico{width:34px;height:34px;border-radius:var(--r-sm);background:var(--accent-dim);
+  border:1px solid var(--accent-line);display:grid;place-items:center;color:#a9b0e0}
+.entry-t{font-size:14px;font-weight:500}
+.entry-d{font-size:12px;color:var(--text-dim);line-height:1.55}
+.entry-url{font-family:var(--mono);font-size:10.5px;color:var(--text-dim);
+  padding-top:8px;border-top:1px solid var(--border);word-break:break-all}
+
+/* ── 数据概览 ── */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{padding:9px 12px;text-align:right;font-weight:500;font-size:11.5px;color:var(--text-dim);
+  border-bottom:1px solid var(--border);white-space:nowrap}
+th:first-child,th:nth-child(2){text-align:left}
+td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
+td:first-child,td:nth-child(2){text-align:left}
+tr:last-child td{border-bottom:none}
+.up{color:var(--err)} .down{color:var(--ok)} .flat{color:var(--text-muted)}
+.pos{color:var(--err)} .neg{color:var(--ok)}
+.empty{padding:34px;text-align:center;color:var(--text-dim);font-size:13px}
+
+/* ── 提示条 ── */
+.note{display:flex;gap:9px;padding:11px 14px;border-radius:var(--r-sm);font-size:12.5px;
+  line-height:1.65;margin-bottom:16px}
+.note.warn{background:var(--warn-dim);border:1px solid var(--warn-line);color:#e0b775}
+.note.info{background:var(--accent-dim);border:1px solid var(--accent-line);color:#a9b0e0}
+.note b{font-weight:600}
+.note code{font-family:var(--mono);font-size:11.5px;background:rgba(0,0,0,.3);
+  padding:1px 5px;border-radius:3px}
+
+/* ── 密钥 ── */
+.key-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.key-input{flex:1;min-width:200px;height:38px;padding:0 12px;border-radius:var(--r-sm);
+  background:var(--surface);border:1px solid var(--border);color:var(--text);
+  font-family:var(--mono);font-size:13px;outline:none;transition:border-color .16s}
+.key-input:focus{border-color:var(--border-strong)}
+
+footer{border-top:1px solid var(--border);padding-top:18px;margin-top:28px;
+  font-size:11.5px;color:var(--text-dim);line-height:1.8}
+
+@media (max-width:860px){
+  .status-grid{grid-template-columns:1fr 1fr}
+  .entries{grid-template-columns:1fr}
+  .wrap{padding:18px 14px 40px}
+}
+@media (max-width:520px){
+  .status-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <span class="brand-mark">⚙</span>
+      <div>
+        <div class="brand-t">数据管理控制台</div>
+        <div class="brand-s">申万行业资金流 · 数据运营</div>
+      </div>
+    </div>
+    <span class="env-tag" id="envTag">连接中…</span>
+  </header>
+
+  <!-- ══ 系统状态 ══ -->
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">系统状态</div>
+        <div class="card-sub">来自 <span class="num">GET /health</span> 与 <span class="num">GET /meta</span></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="refreshBtn">刷新状态</button>
+    </div>
+    <div class="card-body">
+      <div class="status-grid">
+        <div class="st">
+          <div class="st-l"><span class="dot idle" id="dotSvc"></span>服务</div>
+          <div class="st-v" id="vSvc">—</div>
+          <div class="st-s" id="sSvc">—</div>
+        </div>
+        <div class="st">
+          <div class="st-l"><span class="dot idle" id="dotDb"></span>数据库</div>
+          <div class="st-v" id="vDb">—</div>
+          <div class="st-s" id="sDb">MySQL</div>
+        </div>
+        <div class="st">
+          <div class="st-l">最新数据</div>
+          <div class="st-v" id="vDate" style="font-size:17px">—</div>
+          <div class="st-s" id="sDate">—</div>
+        </div>
+        <div class="st">
+          <div class="st-l">数据规模</div>
+          <div class="st-v" id="vScale" style="font-size:15px">—</div>
+          <div class="st-s" id="sScale">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 数据更新 ══ -->
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">数据更新</div>
+        <div class="card-sub">触发后端采集任务 <span class="num">POST /admin/fetch</span></div>
+      </div>
+    </div>
+    <div class="card-body">
+
+      <div class="note warn" id="keyNote">
+        <span>🔑</span>
+        <span><b>需要管理密钥才能执行操作。</b>
+        密钥配置在后端 <code>backend/.env</code> 的 <code>ADMIN_KEY</code>。填写后将保存在本浏览器 localStorage，
+        仅用于携带 <code>X-Admin-Key</code> 请求头。<b>请勿在公共设备上保存。</b></span>
+      </div>
+
+      <div class="key-row" style="margin-bottom:16px">
+        <input class="key-input" type="password" id="adminKey"
+               placeholder="请输入管理密钥（X-Admin-Key）" autocomplete="off" required>
+        <button class="btn btn-ghost btn-sm" id="saveKey">保存到本地</button>
+        <button class="btn btn-ghost btn-sm" id="clearKey">清除</button>
+      </div>
+
+      <div class="run-row">
+        <button class="btn btn-primary" id="runBtn" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>
+          </svg>
+          更新全部数据
+        </button>
+        <div class="run-hint">
+          执行完整 ETL：交易日历 → 股票基础 → 行业分类 → 成分股 → 个股资金流 → 行业聚合。
+          首次采集约需数分钟，请勿重复点击。
+        </div>
+      </div>
+
+      <div class="progress" id="progress">
+        <div class="pg-head">
+          <span class="pg-status" id="pgStatus">
+            <span class="dot warn pulse"></span><span id="pgText">已提交采集任务…</span>
+          </span>
+          <span class="pg-timer" id="pgTimer">00:00</span>
+        </div>
+        <div class="pg-track"><div class="pg-bar indet" id="pgBar"></div></div>
+        <div class="log-box" id="logBox"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══ 快捷入口 ══ -->
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">看板入口</div>
+        <div class="card-sub">由后端 StaticFiles 托管，新窗口打开</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="entries">
+        <a class="entry" href="/industry.html" target="_blank" rel="noopener">
+          <span class="entry-ico">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1">
+              <path d="M3 6h18M3 12h18M3 18h18"/><circle cx="7" cy="6" r="1.6" fill="currentColor"/><circle cx="7" cy="12" r="1.6" fill="currentColor"/><circle cx="7" cy="18" r="1.6" fill="currentColor"/>
+            </svg>
+          </span>
+          <span class="entry-t">行业分类浏览</span>
+          <span class="entry-d">31/134/346 三级行业树，含成分股与个股四档资金流</span>
+          <span class="entry-url">/industry.html</span>
+        </a>
+        <a class="entry" href="/fundflow.html" target="_blank" rel="noopener">
+          <span class="entry-ico">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1">
+              <rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="9" rx="1.5"/>
+            </svg>
+          </span>
+          <span class="entry-t">资金流看板</span>
+          <span class="entry-d">二级行业热力网格 + 排行表，一眼看清资金流向</span>
+          <span class="entry-url">/fundflow.html</span>
+        </a>
+        <a class="entry" href="/资金流四档对比_原型.html" target="_blank" rel="noopener">
+          <span class="entry-ico">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1">
+              <path d="M4 19V9M10 19V4M16 19v-7M22 19H2"/>
+            </svg>
+          </span>
+          <span class="entry-t">四档资金流对比</span>
+          <span class="entry-d">小/中/大/超大单口径说明与主力散户对冲视图</span>
+          <span class="entry-url">/资金流四档对比_原型.html</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 数据概览 ══ -->
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">二级行业数据概览</div>
+        <div class="card-sub" id="ovSub">最新交易日的资金流快照</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="loadOv">加载</button>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div class="empty" id="ovEmpty">点击「加载」查看行业数据</div>
+      <div style="overflow-x:auto;display:none" id="ovWrap">
+        <table>
+          <thead><tr>
+            <th>行业</th><th>一级</th><th>成分股</th>
+            <th>当日净流入</th><th>当日主力</th><th>5日主力</th><th>成交额</th>
+          </tr></thead>
+          <tbody id="ovBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    数据管理控制台 · 申万行业资金流项目<br>
+    后端 FastAPI · 数据库 MySQL 8.0 <span class="num">stock_data</span> · 数据源 Tushare 兼容代理
+  </footer>
+
+</div>
+
+<script>
+/* ══════════ 配置 ══════════ */
+const API = (location.protocol === 'file:') ? 'http://127.0.0.1:8000' : '';
+const LS_KEY = 'sw_admin_key';
+
+const $ = id => document.getElementById(id);
+
+/* 密钥必填：不再回退到任何内置默认值 */
+function getKey(){
+  return (localStorage.getItem(LS_KEY) || $('adminKey').value || '').trim();
+}
+function hasKey(){
+  return getKey().length > 0;
+}
+
+/* ══════════ 状态加载 ══════════ */
+let pollTimer = null, tickTimer = null, startTs = 0;
+
+async function api(path, opts){
+  const r = await fetch(API + '/api/v1' + path, opts);
+  const j = await r.json().catch(()=>({}));
+  return { http: r.status, body: j };
+}
+
+async function loadStatus(){
+  const tag = $('envTag');
+  try {
+    const h = await api('/health');
+    const d = h.body.data || {};
+    const up = d.status === 'up';
+
+    $('dotSvc').className = 'dot ' + (up ? 'ok' : 'err');
+    $('vSvc').textContent = up ? 'UP' : 'DOWN';
+    $('vSvc').className = 'st-v ' + (up ? 'pos' : 'neg');
+    $('sSvc').textContent = 'FastAPI :8000';
+
+    const dbUp = d.db === 'up';
+    $('dotDb').className = 'dot ' + (dbUp ? 'ok' : 'err');
+    $('vDb').textContent = dbUp ? 'UP' : 'DOWN';
+    $('vDb').className = 'st-v ' + (dbUp ? 'pos' : 'neg');
+
+    if (d.latestTradeDate) {
+      $('vDate').textContent = d.latestTradeDate;
+      $('sDate').textContent = '资金流最新交易日';
+    }
+
+    tag.textContent = '已连接 · 127.0.0.1:8000';
+    tag.style.background = 'var(--ok-dim)';
+    tag.style.borderColor = 'var(--ok-line)';
+    tag.style.color = '#4fd9b0';
+
+    // meta
+    const m = await api('/meta');
+    const md = m.body.data || {};
+    if (md.industryCount) {
+      $('vScale').textContent = md.industryCount.l1 + '/' + md.industryCount.l2 + '/' + md.industryCount.l3;
+      $('sScale').textContent =
+        (md.stockCount || 0).toLocaleString() + ' 只股票 · ' +
+        (md.dataStart && md.dataEnd ? (md.dataStart + ' ~ ' + md.dataEnd) : '—');
+    }
+    return md;
+  } catch (e) {
+    tag.textContent = '未连接 · 请确认后端已启动';
+    tag.style.background = 'var(--err-dim)';
+    tag.style.borderColor = 'var(--err-line)';
+    tag.style.color = '#f08ba6';
+    $('dotSvc').className = 'dot err';
+    $('vSvc').textContent = 'DOWN';
+    $('vSvc').className = 'st-v neg';
+    $('dotDb').className = 'dot idle';
+    $('vDb').textContent = '—';
+    return null;
+  }
+}
+
+/* ══════════ 日志 ══════════ */
+function log(text, kind){
+  const box = $('logBox');
+  const t = new Date().toLocaleTimeString('zh-CN', {hour12:false});
+  const div = document.createElement('div');
+  div.className = 'log-line' + (kind ? ' ' + kind : '');
+  div.innerHTML = '<span class="t">[' + t + ']</span> ' + String(text)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function setProgress(on, text){
+  $('progress').classList.toggle('on', on);
+  if (text) $('pgText').textContent = text;
+}
+
+function startTimer(){
+  startTs = Date.now();
+  clearInterval(tickTimer);
+  tickTimer = setInterval(()=>{
+    const s = Math.floor((Date.now() - startTs) / 1000);
+    const mm = String(Math.floor(s/60)).padStart(2,'0');
+    const ss = String(s%60).padStart(2,'0');
+    $('pgTimer').textContent = mm + ':' + ss;
+  }, 1000);
+}
+function stopTimer(){ clearInterval(tickTimer); }
+
+/* ══════════ 触发采集 ══════════ */
+let lastKnownDate = null;
+
+/* 日志行着色 */
+function logKind(line){
+  if (line.indexOf('P0 ETL 完成') >= 0) return 'hl';
+  if (line.indexOf('失败') >= 0 || line.indexOf('错误') >= 0) return 'err';
+  if (line.indexOf('退避') >= 0 || line.indexOf('限速') >= 0 || line.indexOf('重试') >= 0) return 'warn';
+  return '';
+}
+
+/* 渲染日志（增量：只追加新行） */
+let shownLines = 0;
+function renderLog(lines){
+  const box = $('logBox');
+  if (shownLines === 0) box.innerHTML = '';
+  for (let i = shownLines; i < lines.length; i++){
+    const div = document.createElement('div');
+    div.className = 'log-line ' + logKind(lines[i]);
+    div.textContent = lines[i];
+    box.appendChild(div);
+  }
+  shownLines = lines.length;
+  box.scrollTop = box.scrollHeight;
+}
+
+/* 拉取真实进度 */
+async function fetchLog(){
+  const r = await fetch(API + '/api/v1/admin/log?lines=200', {
+    headers: { 'X-Admin-Key': getKey() }
+  });
+  const j = await r.json().catch(()=>({}));
+  return j.data || {};
+}
+
+async function runFetch(){
+  const btn = $('runBtn');
+
+  if (!hasKey()){
+    alert('请先在上方输入管理密钥');
+    $('adminKey').focus();
+    return;
+  }
+
+  btn.disabled = true;
+  btn.dataset.busy = '1';
+  $('logBox').innerHTML = '';
+  shownLines = 0;
+  setProgress(true, '正在提交采集任务…');
+  $('pgBar').className = 'pg-bar indet';
+  $('pgBar').style.background = 'var(--accent)';
+  startTimer();
+
+  const metaBefore = await loadStatus();
+  lastKnownDate = (metaBefore && metaBefore.dataEnd) || null;
+
+  try {
+    const r = await fetch(API + '/api/v1/admin/fetch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': getKey() },
+      body: JSON.stringify({ task: 'all' })
+    });
+    const body = await r.json().catch(()=>({}));
+
+    if (body.code !== 0){
+      log('提交失败：code=' + body.code + ' msg=' + (body.msg || ''), 'err');
+      if (body.code === 40102) log('密钥无效，请检查 backend/.env 中的 ADMIN_KEY', 'err');
+      if (body.code === 42901) log('已有采集任务在运行中', 'warn');
+      setProgress(true, '提交失败');
+      const bar0 = $('pgBar'); bar0.className = 'pg-bar'; bar0.style.width = '100%'; bar0.style.background = 'var(--err)';
+      btn.disabled = false; stopTimer();
+      return;
+    }
+
+    log('任务已接受，开始读取实时日志…', 'hl');
+    setProgress(true, '采集执行中…');
+
+    /* 轮询真实日志 */
+    pollTimer = setInterval(async ()=>{
+      let d;
+      try { d = await fetchLog(); } catch(err){ log('日志读取失败：' + err.message, 'err'); return; }
+
+      if (!d.exists){
+        log('日志文件尚未创建…', 'warn');
+        return;
+      }
+
+      const lines = d.lines || [];
+      renderLog(lines);
+
+      const last = lines.length ? lines[lines.length - 1] : '';
+
+      // 完成判定
+      if (lines.some(x => x.indexOf('P0 ETL 完成') >= 0)){
+        finish(true, null, lines);
+        return;
+      }
+      // 启动判定（本次运行）
+      if (lines.length && lines[0].indexOf('P0 ETL 启动') >= 0){
+        $('pgText').textContent = '采集中 · 已输出 ' + lines.length + ' 行日志';
+      }
+      // 失败判定
+      if (/ETL\s*失败|Traceback|异常退出/.test(last)){
+        finish(false, null, lines);
+      }
+    }, 2500);
+
+    /* 兜底超时 15 分钟 */
+    setTimeout(()=>{
+      if (pollTimer){ log('轮询超时（15 分钟）', 'warn'); finish(false, null, null); }
+    }, 900000);
+
+  } catch (err){
+    log('请求异常：' + err.message, 'err');
+    setProgress(true, '请求失败');
+    const b1 = $('pgBar'); b1.className = 'pg-bar'; b1.style.background = 'var(--err)'; b1.style.width = '100%';
+    btn.disabled = false; stopTimer();
+  }
+}
+
+function finish(ok, date, lines){
+  clearInterval(pollTimer); pollTimer = null;
+  stopTimer();
+
+  const bar = $('pgBar');
+  bar.className = 'pg-bar';
+  bar.style.width = '100%';
+  bar.style.background = ok ? 'var(--ok)' : 'var(--err)';
+
+  if (ok){
+    /* 从日志中提取写入行数等摘要 */
+    let summary = '';
+    if (lines){
+      const w = lines.filter(x => /写入|同步/.test(x)).slice(-1)[0];
+      if (w) summary = ' · ' + w.replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, '');
+    }
+    setProgress(true, '采集完成 ✓' + summary);
+    log('═══ 采集完成 ═══', 'hl');
+  } else {
+    setProgress(true, '采集未正常结束，请检查日志');
+    log('═══ 采集异常结束 ═══', 'err');
+  }
+  // 刷新一次状态，让最新日期同步
+  loadStatus();
+  const rb = $('runBtn'); rb.dataset.busy = '0'; rb.disabled = !hasKey();
+}
+
+/* ══════════ 数据概览 ══════════ */
+async function loadOverview(){
+  const empty = $('ovEmpty'), wrap = $('ovWrap'), body = $('ovBody');
+  empty.style.display = 'block';
+  empty.textContent = '加载中…';
+  wrap.style.display = 'none';
+
+  try {
+    const r = await api('/industries?level=2&page_size=1000');
+    const d = r.body.data || {};
+    const list = d.list || [];
+    if (!list.length) { empty.textContent = '暂无数据'; return; }
+
+    body.innerHTML = list
+      .slice()
+      .sort((a,b)=> Math.abs(b.todayNet||0) - Math.abs(a.todayNet||0))
+      .map(x => {
+        const n = x.todayNet, m = x.todayMain, m5 = x.main5d, t = x.turnover;
+        const f = v => (v==null ? '—' : ((v>=0?'+':'') + v.toFixed(2) + '亿'));
+        const c = v => v==null ? 'flat' : (v>0.005?'pos':(v<-0.005?'neg':'flat'));
+        return '<tr>'
+          + '<td>' + x.name + '</td>'
+          + '<td style="color:var(--text-dim)">' + (x.l1Name||'—') + '</td>'
+          + '<td class="num" style="color:var(--text-muted)">' + (x.memberCount||0) + '</td>'
+          + '<td class="num ' + c(n) + '">' + f(n) + '</td>'
+          + '<td class="num ' + c(m) + '">' + f(m) + '</td>'
+          + '<td class="num ' + c(m5) + '">' + f(m5) + '</td>'
+          + '<td class="num" style="color:var(--text-muted)">' + (t==null?'—':t.toFixed(1)) + '</td>'
+          + '</tr>';
+      }).join('');
+
+    empty.style.display = 'none';
+    wrap.style.display = 'block';
+    $('ovSub').textContent = '共 ' + list.length + ' 个二级行业 · 按当日净流入绝对值排序';
+  } catch (e) {
+    empty.textContent = '加载失败：' + e.message;
+  }
+}
+
+/* ══════════ 密钥 ══════════ */
+function initKey(){
+  const saved = localStorage.getItem(LS_KEY);
+  if (saved){
+    $('adminKey').value = saved;
+    $('keyNote').style.display = 'none';
+  } else {
+    $('keyNote').style.display = 'flex';
+  }
+  syncRunBtn();
+}
+
+/* 未填密钥时禁用「更新」按钮 */
+function syncRunBtn(){
+  const btn = $('runBtn');
+  if (!btn) return;
+  if (btn.dataset.busy === '1') return;
+  btn.disabled = !hasKey();
+}
+
+/* ══════════ 事件 ══════════ */
+$('refreshBtn').addEventListener('click', loadStatus);
+$('runBtn').addEventListener('click', runFetch);
+$('loadOv').addEventListener('click', loadOverview);
+
+$('adminKey').addEventListener('input', syncRunBtn);
+$('adminKey').addEventListener('keydown', e => {
+  if (e.key === 'Enter') $('saveKey').click();
+});
+
+$('saveKey').addEventListener('click', ()=>{
+  const v = $('adminKey').value.trim();
+  if (!v) { alert('请输入密钥'); return; }
+  localStorage.setItem(LS_KEY, v);
+  $('keyNote').style.display = 'none';
+  syncRunBtn();
+  alert('已保存到本地浏览器');
+});
+$('clearKey').addEventListener('click', ()=>{
+  localStorage.removeItem(LS_KEY);
+  $('adminKey').value = '';
+  $('keyNote').style.display = 'flex';
+  syncRunBtn();
+  alert('已清除，需要重新输入密钥');
+});
+
+/* ══════════ 启动 ══════════ */
+initKey();
+loadStatus();
+</script>
+</body>
+</html>

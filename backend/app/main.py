@@ -6,12 +6,14 @@
 """
 import os
 import sys
+import time
 import uuid
 import threading
+from collections import deque
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fastapi import FastAPI, Depends, Query, Path, Header, Request
+from fastapi import FastAPI, Body, Depends, Query, Path, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -27,7 +29,14 @@ app.add_middleware(
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
 
-ADMIN_KEY = os.getenv("ADMIN_KEY", "change-me-admin-key")
+DEFAULT_ADMIN_KEY = "change-me-admin-key"
+ADMIN_KEY = os.getenv("ADMIN_KEY", "").strip()
+# 未配置 / 仍为默认值 → 管理接口一律拒绝（fail closed），避免「默认密钥」被随意调用
+ADMIN_KEY_ENABLED = bool(ADMIN_KEY) and ADMIN_KEY != DEFAULT_ADMIN_KEY
+
+if not ADMIN_KEY_ENABLED:
+    print("[WARN] ADMIN_KEY 未设置或仍为默认值 —— 管理接口 /api/v1/admin/* 已禁用。"
+          "请在 backend/.env 中设置 ADMIN_KEY（随机长字符串）后重启服务。", flush=True)
 
 
 def _trace():
@@ -422,22 +431,53 @@ def market_strength(conn=Depends(get_conn)):
     return ok({"list": lst})
 
 
-# ───────────────────────── 10. 触发采集（管理） ─────────────────────────
+# ───────────────────────── 10. 管理接口 ─────────────────────────
 _fetching = threading.Lock()
+_VALID_TASKS = ("all", "meta", "members", "moneyflow", "aggregate")
 
 
 @app.post("/api/v1/admin/fetch")
-def trigger_fetch(x_admin_key: str = Header(""), task: str = "all"):
+def trigger_fetch(x_admin_key: str = Header(""), task: str = Body("all", embed=True)):
+    if not ADMIN_KEY_ENABLED:
+        return err(40102, "admin disabled: ADMIN_KEY 未在 backend/.env 配置或仍为默认值")
     if x_admin_key != ADMIN_KEY:
         return err(40102, "invalid admin key")
+    if task not in _VALID_TASKS:
+        return err(40001, "unknown task: %s（可选 %s）" % (task, "/".join(_VALID_TASKS)))
     if not _fetching.acquire(blocking=False):
         return err(42901, "fetch already running")
     try:
         import etl
-        threading.Thread(target=etl.main, daemon=True).start()
+        threading.Thread(target=etl.main, args=([task],), daemon=True).start()
         return ok({"task": task, "status": "accepted"})
     finally:
         _fetching.release()
+
+
+@app.get("/api/v1/admin/log")
+def admin_log(x_admin_key: str = Header(""), lines: int = Query(200, ge=1, le=2000)):
+    """返回 ETL 日志尾部若干行，供管理页展示真实采集进度。"""
+    if not ADMIN_KEY_ENABLED:
+        return err(40102, "admin disabled: ADMIN_KEY 未在 backend/.env 配置或仍为默认值")
+    if x_admin_key != ADMIN_KEY:
+        return err(40102, "invalid admin key")
+    path = cfg.log_file
+    if not os.path.exists(path):
+        return ok({"exists": False, "total": 0, "mtime": None, "lines": []})
+    with open(path, encoding="utf-8", errors="replace") as f:
+        tail = list(deque(f, maxlen=lines))
+    total = len(tail)
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            total = sum(1 for _ in f)
+    except Exception:  # noqa: BLE001
+        pass
+    return ok({
+        "exists": True,
+        "total": total,
+        "mtime": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getmtime(path))),
+        "lines": [ln.rstrip("\n") for ln in tail],
+    })
 
 
 # 静态前端托管（挂载在所有路由之后，/api/v1 优先匹配）

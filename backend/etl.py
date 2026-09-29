@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """P0 ETL：建表 + 同步分类/成分股/资金流 + 聚合行业资金流。
 
-用法：python etl.py  （在 backend 目录或指定绝对路径运行均可）
+用法：python etl.py [all|meta|members|moneyflow|aggregate]
+  all(默认) 全量 / meta 仅分类基础 / members 仅成分股+聚合(补漏用) /
+  moneyflow 仅资金流+聚合 / aggregate 仅聚合
 日志写入 config.log_file（默认 backend/etl_run.log）。
 """
 import sys
@@ -141,36 +143,61 @@ def sync_stock_basic(client, conn, log):
 
 
 def sync_members(client, conn, log, level=2):
+    """同步某层级全部行业的成分股。
+
+    - 源端返回空 → 计入 empty（该行业在数据源确实没有成分，不是失败）
+    - 请求失败 → 收集后统一重扫一轮（40203 已由 TushareClient 内部退避）
+    """
     codes = [r[0] for r in db.query(conn, "SELECT sw_code FROM t_industry WHERE level=%s ORDER BY sw_code", (level,))]
     log.log(f"index_member 同步 L{level} 行业 {len(codes)} 个 …")
-    total = 0
-    fails = 0
-    for i, code in enumerate(codes):
-        try:
-            rows, _ = client.call("index_member", index_code=code + ".SI")
-        except Exception as e:  # noqa: BLE001
-            fails += 1
-            if fails <= 5:
-                log.log(f"  {code} index_member 失败: {e}")
-            continue
-        data = []
-        for r in rows:
-            in_d = d(r.get("in_date")) or "19900101"
-            data.append({"index_code": code, "con_code": r["con_code"],
-                         "in_date": in_d, "out_date": d(r.get("out_date")),
-                         "is_new": r.get("is_new")})
-        if data:
+    state = {"total": 0}
+    empty = []
+
+    def one_pass(pending, tag):
+        still = []
+        for i, code in enumerate(pending):
+            try:
+                rows, _ = client.call("index_member", index_code=code + ".SI")
+            except Exception as e:  # noqa: BLE001
+                still.append(code)
+                if len(still) <= 5:
+                    log.log(f"  {code} index_member 失败: {e}")
+                continue
+            if not rows:
+                empty.append(code)
+                continue
+            data = []
+            for r in rows:
+                in_d = d(r.get("in_date")) or "19900101"
+                data.append({"index_code": code, "con_code": r["con_code"],
+                             "in_date": in_d, "out_date": d(r.get("out_date")),
+                             "is_new": r.get("is_new")})
             db.executemany(conn, (
                 "INSERT INTO t_industry_member (index_code, con_code, in_date, out_date, is_new) "
                 "VALUES (%(index_code)s, %(con_code)s, %(in_date)s, %(out_date)s, %(is_new)s) "
                 "ON DUPLICATE KEY UPDATE out_date=VALUES(out_date), is_new=VALUES(is_new), updated_at=NOW()"
             ), data)
-            total += len(data)
-        if (i + 1) % 40 == 0:
-            conn.commit()
-            log.log(f"  members 进度 {i+1}/{len(codes)}，累计 {total} 行")
-    conn.commit()
-    log.log(f"t_industry_member 写入 {total} 行（失败 {fails} 个）")
+            state["total"] += len(data)
+            if (i + 1) % 40 == 0:
+                conn.commit()
+                log.log(f"  members[{tag}] 进度 {i+1}/{len(pending)}，累计 {state['total']} 行")
+        conn.commit()
+        return still
+
+    failed = one_pass(codes, "第1轮")
+    if failed:
+        log.log(f"  第1轮后仍有 {len(failed)} 个失败，等待 60s 后重扫 …")
+        time.sleep(60)
+        failed = one_pass(failed, "第2轮")
+
+    log.log(f"t_industry_member 写入 {state['total']} 行"
+            f"（源端空结果 {len(empty)} 个，最终失败 {len(failed)} 个）")
+    if empty:
+        log.log(f"  源端无成分数据（数据源限制）{len(empty)} 个: "
+                + ", ".join(empty[:40]) + (" …" if len(empty) > 40 else ""))
+    if failed:
+        log.log(f"  !! 最终仍失败 {len(failed)} 个: " + ", ".join(failed))
+    return state["total"]
 
 
 def sync_moneyflow(client, conn, log, days):
@@ -271,10 +298,15 @@ def summary(conn, log):
         log.log(f"    {row[0]} {row[1]} net={row[2]} main={row[3]} turnover={row[4]} members={row[5]}")
 
 
-def main():
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    task = (argv[0].strip().lower() if argv and argv[0].strip() else "all")
+    if task not in ("all", "meta", "members", "moneyflow", "aggregate"):
+        task = "all"
     cfg = Config()
     log = Logger(cfg.log_file)
-    log.log(f"P0 ETL 启动 endpoint={cfg.endpoint} token_len={len(cfg.token)} db={cfg.db_host}:{cfg.db_port}/{cfg.db_name}")
+    log.log(f"P0 ETL 启动 task={task} endpoint={cfg.endpoint} "
+            f"token_len={len(cfg.token)} db={cfg.db_host}:{cfg.db_port}/{cfg.db_name}")
     if not cfg.token:
         log.log("FATAL: 未读取到 token")
         return 2
@@ -291,15 +323,21 @@ def main():
         log.log("schema 建表完成")
 
         client = TushareClient(cfg.endpoint, cfg.token)
-        sync_trade_cal(client, conn, log)
-        sync_industry(client, conn, log)
-        sync_stock_basic(client, conn, log)
-        sync_members(client, conn, log, level=2)
-        sync_members(client, conn, log, level=3)
-        sync_moneyflow(client, conn, log, cfg.moneyflow_days)
-        aggregate_flow(conn, log)
+        log.log(f"节流 {client.qps_delay}s/次（≤{int(60 / max(client.qps_delay, 0.001))} 次/分钟）"
+                f" · 40203 退避 {client.rate_limit_wait}s×n · 最多重试 {client.max_retries} 次")
+        if task in ("all", "meta"):
+            sync_trade_cal(client, conn, log)
+            sync_industry(client, conn, log)
+            sync_stock_basic(client, conn, log)
+        if task in ("all", "members"):
+            sync_members(client, conn, log, level=2)
+            sync_members(client, conn, log, level=3)
+        if task in ("all", "moneyflow"):
+            sync_moneyflow(client, conn, log, cfg.moneyflow_days)
+        if task in ("all", "members", "moneyflow", "aggregate"):
+            aggregate_flow(conn, log)
         summary(conn, log)
-        log.log("P0 ETL 完成")
+        log.log(f"P0 ETL 完成（task={task}）")
         return 0
     except Exception:
         log.log("FATAL: " + traceback.format_exc())
