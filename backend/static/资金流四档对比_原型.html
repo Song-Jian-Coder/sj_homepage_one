@@ -44,6 +44,11 @@ h1{margin:0 0 8px;font-size:22px;font-weight:600;letter-spacing:-.028em}
 .badge{display:inline-block;padding:2px 8px;border-radius:100px;font-size:11px;
   margin-left:8px;vertical-align:2px}
 .badge.real{background:rgba(0,196,140,.12);border:1px solid rgba(0,196,140,.32);color:#4fd9b0}
+/* 静态样例提示条：本页零 API 调用，必须让读者一眼看出来（审查报告 6.1 P2） */
+.proto-note{display:flex;align-items:flex-start;gap:9px;padding:11px 14px;margin:16px 0 20px;
+  background:rgba(245,165,36,.1);border:1px solid rgba(245,165,36,.34);border-radius:var(--r);
+  font-size:12.5px;color:#e8c98a;line-height:1.6}
+.proto-note b{color:#f5d9a8;font-weight:600}
 
 /* ── 定义卡 ── */
 .defs{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);
@@ -143,8 +148,8 @@ tr.total td{font-weight:600;border-top:1px solid var(--border-strong)}
 
   <header style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
     <div>
-      <h1>四档资金流对比<span class="badge real">真实数据 · 贵州茅台</span></h1>
-      <div class="sub">贵州茅台（600519.SH）· 白酒Ⅱ · 20260630 ~ 20260921 · 共 60 个交易日</div>
+      <h1>四档资金流对比<span class="badge real">静态样例 · 非实时</span></h1>
+      <div class="sub">贵州茅台（600519.SH）· 白酒Ⅱ · 20260630 ~ 20260921 · 共 60 个交易日 · 本页为<b>硬编码样例数据</b>，不连接后端接口</div>
     </div>
     <a class="back-admin" href="/admin.html" title="返回数据管理控制台">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
@@ -153,6 +158,15 @@ tr.total td{font-weight:600;border-top:1px solid var(--border-strong)}
   </header>
 
   <!-- 定义 -->
+  <div class="proto-note">
+    <span>⚠️</span>
+    <span><b>这是设计原型，不是实时行情。</b>
+    本页不调用任何后端接口，图表数据是内嵌的 60 天<b>静态样例数组</b>，
+    仅用于展示四档资金流的口径与视觉方案。
+    要看真实数据请回到 <a href="/industry.html" style="color:#f5d9a8">行业分类</a> 或
+    <a href="/fundflow.html" style="color:#f5d9a8">资金流看板</a>。</span>
+  </div>
+
   <div class="defs">
     <div class="def" style="--c:var(--sm)">
       <div class="def-t"><span class="dot"></span><span class="def-name">小单</span></div>
@@ -244,6 +258,17 @@ function genFlow(code, days){
   return REAL_600519.slice(-d);
 }
 
+/* 日期轴标签归一化。
+   原代码用 `d.d.slice(5)` —— 那是为 ISO 日期（2026-06-30）写的，
+   但本页数据里的 d 是 YYYYMMDD（20260630），slice(5) 会渲染出 "630"
+   （审查报告 6.1 P2）。这里对两种格式都给出 MM-DD。 */
+function axisDate(s){
+  const t = String(s || '');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t.slice(5);
+  if (/^\d{8}$/.test(t)) return t.slice(4, 6) + '-' + t.slice(6, 8);
+  return t;
+}
+
 const RAW = genFlow('688981.SH', 60);
 const KEY = {sm:'小单', md:'中单', lg:'大单', elg:'超大单'};
 const COLOR = {sm:'var(--sm)', md:'var(--md)', lg:'var(--lg)', elg:'var(--elg)'};
@@ -318,7 +343,7 @@ function draw(){
 
     const xl = [0, Math.floor(RAW.length/2), RAW.length-1].map(i => {
       const d = RAW[i]; if(!d) return '';
-      return `<text class="axis" x="${(PL + step*i + step/2).toFixed(1)}" y="${H-10}" text-anchor="middle">${d.d.slice(5)}</text>`;
+      return `<text class="axis" x="${(PL + step*i + step/2).toFixed(1)}" y="${H-10}" text-anchor="middle">${axisDate(d.d)}</text>`;
     }).join('');
 
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -364,7 +389,7 @@ function draw(){
 
     const xl = [0, Math.floor(RAW.length/2), RAW.length-1].map(i => {
       const d = RAW[i]; if(!d) return '';
-      return `<text class="axis" x="${(PL + step*i + step/2).toFixed(1)}" y="${H-10}" text-anchor="middle">${d.d.slice(5)}</text>`;
+      return `<text class="axis" x="${(PL + step*i + step/2).toFixed(1)}" y="${H-10}" text-anchor="middle">${axisDate(d.d)}</text>`;
     }).join('');
 
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -399,7 +424,7 @@ function draw(){
 
     const xl = [0, Math.floor(CUM.length/2), CUM.length-1].map(i => {
       const d = CUM[i]; if(!d) return '';
-      return `<text class="axis" x="${xOf(i).toFixed(1)}" y="${H-10}" text-anchor="middle">${d.d.slice(5)}</text>`;
+      return `<text class="axis" x="${xOf(i).toFixed(1)}" y="${H-10}" text-anchor="middle">${axisDate(d.d)}</text>`;
     }).join('');
 
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);

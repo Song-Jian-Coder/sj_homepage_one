@@ -4,9 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>申万二级行业资金流 · 实时看板</title>
+<meta name="description" content="申万二级行业资金流实时看板：热力图与排行表展示主力净流入、净流入占比与相对强度。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%235e6ad2'/%3E%3Cpath d='M8 21l5-7 5 4 6-9' stroke='%23fff' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- 共享层：转义 / API 封装 / 色板阈值 -->
+<script src="common.js"></script>
+<!-- CSP 兜底防线（审查报告 9.3-1 第 4 步）
+     ⚠ 实测修正：把 script-src 收紧为同源会拦掉本页自己的大内联脚本块 → 白屏。
+     script-src 必须显式带 unsafe-inline（单文件内联脚本、无构建步骤的必然代价）。
+     其余指令仍是实打实的加固：object-src none（插件类注入）、base-uri self
+     （base 标签劫持）、form-action self（表单外发）、default-src 域白名单。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' http://127.0.0.1:8000; object-src 'none'; base-uri 'self'; form-action 'self'">
 <style>
 :root{
   --bg:#0a0b0d; --bg-elev:#101114; --surface:#16181c; --surface-2:#1c1f24;
@@ -131,6 +141,7 @@ header{
 }
 .tile:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.3);box-shadow:0 6px 20px rgba(0,0,0,.5);z-index:5;filter:brightness(1.08)}
 .tile:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.tile:active{transform:translateY(0)}
 .tile-name{
   font-size:12px;font-weight:600;line-height:1.25;letter-spacing:-.01em;
   overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
@@ -151,6 +162,10 @@ tbody td{padding:10px 14px;text-align:right;border-bottom:1px solid var(--border
 tbody td:first-child,tbody td:nth-child(2){text-align:left}
 tbody tr{transition:background-color .14s var(--ease)}
 tbody tr:hover{background:var(--surface)}
+/* 键盘可操作行（审查报告 6.5 P2：表格行原来只能点击） */
+tbody tr{cursor:pointer;transition:background-color .14s var(--ease)}
+tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;background:var(--surface)}
+tbody tr:active{background:var(--surface-2)}
 tbody tr:last-child td{border-bottom:none}
 .rank{font-family:var(--mono);color:var(--text-dim);font-size:12px;width:46px}
 .ind-name{font-weight:500}
@@ -293,7 +308,7 @@ footer{
       </svg>
       <input type="search" id="q" placeholder="搜索行业 / 代码 / 龙头股" autocomplete="off">
     </label>
-    <span class="hint" id="hint"></span>
+    <span class="hint" id="hint" role="status" aria-live="polite"></span>
   </div>
 </div>
 
@@ -352,8 +367,7 @@ footer{
         <thead>
           <tr>
             <th>#</th><th>行业</th><th>一级行业</th><th>成分股</th>
-            <th>主力净流入</th><th>净流入占比</th><th>强度</th>
-          </tr>
+            <th>主力净流入</th><th>净流入占比</th><th>强度</th>          </tr>
         </thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -384,34 +398,51 @@ footer{
 </aside>
 <script>
 /* ══════ 数据 ══════ */
-const SW = [{"code":"801011","name":"林业Ⅱ","l1":"农林牧渔","n":4,"top":["平潭发展","永安林业","福建金森","*ST景谷"]},{"code":"801012","name":"农产品加工","l1":"农林牧渔","n":23,"top":["深粮控股","京粮控股","*ST广糖","中粮科技"]},{"code":"801014","name":"饲料","l1":"农林牧渔","n":18,"top":["正虹科技","新希望","粤海饲料","播恩集团"]},{"code":"801015","name":"渔业","l1":"农林牧渔","n":6,"top":["中水渔业","獐子岛","国联水产","开创国际"]},{"code":"801016","name":"种植业","l1":"农林牧渔","n":20,"top":["国投丰乐","隆平高科","登海种业","诺普信"]},{"code":"801017","name":"养殖业","l1":"农林牧渔","n":22,"top":["京基智农","罗牛山","东瑞股份","天邦食品"]},{"code":"801018","name":"动物保健Ⅱ","l1":"农林牧渔","n":9,"top":["金河生物","绿康生化","瑞普生物","回盛生物"]},{"code":"801019","name":"农业综合Ⅱ","l1":"农林牧渔","n":2,"top":["辉隆股份","大禹节水"]},{"code":"801032","name":"化学纤维","l1":"基础化工","n":26,"top":["吉林化纤","ST海龙","恒申新材","华西股份"]},{"code":"801033","name":"化学原料","l1":"基础化工","n":57,"top":["新金路","金浦钛业","英力特","博源化工"]},{"code":"801034","name":"化学制品","l1":"基础化工","n":172,"top":["渝三峡A","中广核技","丽臣实业","信凯科技"]},{"code":"801036","name":"塑料","l1":"基础化工","n":72,"top":["国风新材","沃顿科技","佛塑科技","博菲电气"]},{"code":"801037","name":"橡胶","l1":"基础化工","n":17,"top":["联科科技","元创股份","黑猫股份","三力士"]},{"code":"801038","name":"农化制品","l1":"基础化工","n":59,"top":["藏格矿业","湖北宜化","红太阳","安道麦A"]},{"code":"801039","name":"非金属材料Ⅱ","l1":"基础化工","n":8,"top":["长江材料","力量钻石","索通发展","石英股份"]},{"code":"801043","name":"冶钢原料","l1":"钢铁","n":10,"top":["钒钛股份","金岭矿业","河钢资源","大中矿业"]},{"code":"801044","name":"普钢","l1":"钢铁","n":22,"top":["河钢股份","中南股份","本钢板材","新兴铸管"]},{"code":"801045","name":"特钢Ⅱ","l1":"钢铁","n":12,"top":["中信特钢","太钢不锈","沙钢股份","久立特材"]},{"code":"801051","name":"金属新材料","l1":"有色金属","n":32,"top":["合金投资","英洛华","安泰科技","中科三环"]},{"code":"801053","name":"贵金属","l1":"有色金属","n":11,"top":["招金黄金","山金国际","四川黄金","湖南黄金"]},{"code":"801054","name":"小金属","l1":"有色金属","n":27,"top":["中钨高新","国城矿业","中国稀土","锡业股份"]},{"code":"801055","name":"工业金属","l1":"有色金属","n":59,"top":["中金岭南","兴业银锡","盛达资源","焦作万方"]},{"code":"801056","name":"能源金属","l1":"有色金属","n":11,"top":["西藏矿业","融捷股份","盛新锂能","赣锋锂业"]},{"code":"801072","name":"通用设备","l1":"机械设备","n":220,"top":["中集集团","沈阳机床","冰山冷热","中核科技"]},{"code":"801074","name":"专用设备","l1":"机械设备","n":181,"top":["石化机械","冀东装备","和泰机电","炜冈科技"]},{"code":"801076","name":"轨交设备Ⅱ","l1":"机械设备","n":30,"top":["神州高铁","众合科技","中国铁物","长青科技"]},{"code":"801077","name":"工程机械","l1":"机械设备","n":28,"top":["中联重科","徐工机械","柳工","山推股份"]},{"code":"801078","name":"自动化设备","l1":"机械设备","n":82,"top":["华工科技","欧克科技","宏英智能","大族激光"]},{"code":"801081","name":"半导体","l1":"电子","n":181,"top":["德明利","紫光国微","大港股份","康强电子"]},{"code":"801082","name":"其他电子Ⅱ","l1":"电子","n":33,"top":["深圳华强","盈方微","中电港","好上好"]},{"code":"801083","name":"元件","l1":"电子","n":61,"top":["风华高科","超声电子","嘉立创","广合科技"]},{"code":"801084","name":"光学光电子","l1":"电子","n":93,"top":["深华发A","深纺织A","深天马A","TCL科技"]},{"code":"801085","name":"消费电子","l1":"电子","n":91,"top":["深科技","亿道信息","国光电器","ST得润"]},{"code":"801086","name":"电子化学品Ⅱ","l1":"电子","n":35,"top":["西陇科学","万润股份","光华科技","鼎龙股份"]},{"code":"801092","name":"汽车服务","l1":"汽车","n":9,"top":["浩物股份","阿尔特","中汽股份","国机汽车"]},{"code":"801093","name":"汽车零部件","l1":"汽车","n":244,"top":["富奥股份","潍柴动力","万向钱潮","苏常柴A"]},{"code":"801095","name":"乘用车","l1":"汽车","n":8,"top":["海马汽车","长安汽车","比亚迪","上汽集团"]},{"code":"801096","name":"商用车","l1":"汽车","n":13,"top":["江铃汽车","一汽解放","安凯客车","中国重汽"]},{"code":"801101","name":"计算机设备","l1":"计算机","n":82,"top":["中国长城","浪潮信息","新大陆","魅视科技"]},{"code":"801102","name":"通信设备","l1":"通信","n":85,"top":["中兴通讯","特发信息","汇源通信","汇绿生态"]},{"code":"801103","name":"IT服务Ⅱ","l1":"计算机","n":122,"top":["神州数码","常山北明","云鼎科技","神州信息"]},{"code":"801104","name":"软件开发","l1":"计算机","n":130,"top":["国新健康","南天信息","远光软件","石基信息"]},{"code":"801111","name":"白色家电","l1":"家用电器","n":11,"top":["*ST康佳A","美的集团","长虹美菱","格力电器"]},{"code":"801112","name":"黑色家电","l1":"家用电器","n":9,"top":["四川九洲","创维数字","兆驰股份","高斯贝尔"]},{"code":"801113","name":"小家电","l1":"家用电器","n":20,"top":["利仁科技","德豪润达","苏泊尔","九阳股份"]},{"code":"801114","name":"厨卫电器","l1":"家用电器","n":9,"top":["华帝股份","老板电器","万和电气","浙江美大"]},{"code":"801115","name":"照明设备Ⅱ","l1":"家用电器","n":12,"top":["佛山照明","联域股份","星光股份","勤上股份"]},{"code":"801116","name":"家电零部件Ⅱ","l1":"家用电器","n":29,"top":["长虹华意","联合精密","盾安环境","三花智控"]},{"code":"801117","name":"其他家电Ⅱ","l1":"家用电器","n":3,"top":["奥佳华","融捷健康","荣泰健康"]},{"code":"801124","name":"食品加工","l1":"食品饮料","n":25,"top":["广弘控股","ST西王","双汇发展","千味央厨"]},{"code":"801125","name":"白酒Ⅱ","l1":"食品饮料","n":19,"top":["泸州老窖","古井贡酒","酒鬼酒","五粮液"]},{"code":"801126","name":"非白酒","l1":"食品饮料","n":16,"top":["燕京啤酒","*ST西发","张裕A","兰州黄河"]},{"code":"801127","name":"饮料乳品","l1":"食品饮料","n":26,"top":["承德露露","阳光乳业","皇氏集团","贝因美"]},{"code":"801128","name":"休闲食品","l1":"食品饮料","n":22,"top":["黑芝麻","青岛食品","洽洽食品","好想你"]},{"code":"801129","name":"调味发酵品Ⅱ","l1":"食品饮料","n":14,"top":["佳隆股份","涪陵榨菜","ST加加","仲景食品"]},{"code":"801131","name":"纺织制造","l1":"纺织服饰","n":32,"top":["鲁泰A","华茂股份","欣龙控股","福恩股份"]},{"code":"801132","name":"服装家纺","l1":"纺织服饰","n":59,"top":["洪兴股份","泰慕士","七匹狼","报喜鸟"]},{"code":"801133","name":"饰品","l1":"纺织服饰","n":15,"top":["深中华A","飞亚达","潮宏基","明牌珠宝"]},{"code":"801141","name":"包装印刷","l1":"轻工制造","n":40,"top":["珠海中富","陕西金叶","强邦新材","永新股份"]},{"code":"801142","name":"家居用品","l1":"轻工制造","n":73,"top":["大亚圣象","双枪科技","华瓷股份","悍高集团"]},{"code":"801143","name":"造纸","l1":"轻工制造","n":23,"top":["ST晨鸣","凯恩股份","景兴纸业","太阳纸业"]},{"code":"801145","name":"文娱用品","l1":"轻工制造","n":20,"top":["源飞宠物","浙江正特","三柏硕","通达创智"]},{"code":"801151","name":"化学制药","l1":"医药生物","n":149,"top":["丰原药业","丽珠集团","海南海药","东北制药"]},{"code":"801152","name":"生物制品","l1":"医药生物","n":51,"top":["派林生物","四环生物","万泽股份","长春高新"]},{"code":"801153","name":"医疗器械","l1":"医药生物","n":129,"top":["科华生物","达安基因","鱼跃医疗","蓝帆医疗"]},{"code":"801154","name":"医药商业","l1":"医药生物","n":32,"top":["国药一致","ST海王","英特集团","浙江震元"]},{"code":"801155","name":"中药Ⅱ","l1":"医药生物","n":66,"top":["东阿阿胶","云南白药","古汉医药","吉林敖东"]},{"code":"801156","name":"医疗服务","l1":"医药生物","n":51,"top":["南华生物","国际医学","贝瑞基因","美年健康"]},{"code":"801161","name":"电力","l1":"公用事业","n":109,"top":["深圳能源","深南电A","川能动力","珠海港"]},{"code":"801163","name":"燃气Ⅱ","l1":"公用事业","n":28,"top":["胜利股份","德龙汇能","ST金鸿","美能能源"]},{"code":"801178","name":"物流","l1":"交通运输","n":47,"top":["远大控股","浙商中拓","炬申股份","世盟股份"]},{"code":"801179","name":"铁路公路","l1":"交通运输","n":33,"top":["粤高速A","湖南投资","西部创业","山西高速"]},{"code":"801181","name":"房地产开发","l1":"房地产","n":83,"top":["万科A","深振业A","深物业A","沙河股份"]},{"code":"801183","name":"房地产服务","l1":"房地产","n":12,"top":["*ST皇庭","我爱我家","招商积余","中天服务"]},{"code":"801191","name":"多元金融","l1":"非银金融","n":24,"top":["渤海租赁","华金资本","陕国投A","海德股份"]},{"code":"801193","name":"证券Ⅱ","l1":"非银金融","n":50,"top":["申万宏源","东北证券","锦龙股份","国元证券"]},{"code":"801194","name":"保险Ⅱ","l1":"非银金融","n":5,"top":["中国平安","中国人保","新华保险","中国太保"]},{"code":"801202","name":"贸易Ⅱ","l1":"商贸零售","n":12,"top":["中成股份","厦门信达","凯瑞德","江苏国泰"]},{"code":"801203","name":"一般零售","l1":"商贸零售","n":60,"top":["全新好","深赛格","农产品","合百集团"]},{"code":"801204","name":"专业连锁Ⅱ","l1":"商贸零售","n":7,"top":["天音控股","爱施德","吉峰科技","博士眼镜"]},{"code":"801206","name":"互联网电商","l1":"商贸零售","n":18,"top":["ST易购","南极电商","焦点科技","跨境通"]},{"code":"801207","name":"旅游零售Ⅱ","l1":"商贸零售","n":2,"top":["珠免集团","中国中免"]},{"code":"801216","name":"体育Ⅱ","l1":"社会服务","n":2,"top":["力盛体育","中体产业"]},{"code":"801218","name":"专业服务","l1":"社会服务","n":29,"top":["中钢天源","力合科创","广电计量","开普检测"]},{"code":"801219","name":"酒店餐饮","l1":"社会服务","n":9,"top":["华天酒店","西安饮食","全聚德","ST云网"]},{"code":"801223","name":"通信服务","l1":"通信","n":37,"top":["国安股份","中嘉博创","三维通信","梦网科技"]},{"code":"801231","name":"综合Ⅱ","l1":"综合","n":20,"top":["特力A","南京公用","红棉股份","ST三木"]},{"code":"801711","name":"水泥","l1":"建筑材料","n":21,"top":["金隅冀东","上峰材料","万年青","天山股份"]},{"code":"801712","name":"玻璃玻纤","l1":"建筑材料","n":16,"top":["南玻A","中材科技","九鼎新材","北玻股份"]},{"code":"801713","name":"装修建材","l1":"建筑材料","n":35,"top":["方大集团","海螺新材","北新建材","中旗新材"]},{"code":"801721","name":"房屋建设Ⅱ","l1":"建筑装饰","n":8,"top":["高新发展","浙江建投","上海建工","陕建股份"]},{"code":"801722","name":"装修装饰Ⅱ","l1":"建筑装饰","n":22,"top":["宝鹰股份","金螳螂","海南发展","亚厦股份"]},{"code":"801723","name":"基础建设","l1":"建筑装饰","n":40,"top":["*ST美丽","山东路桥","誉帆科技","广东建工"]},{"code":"801724","name":"专业工程","l1":"建筑装饰","n":37,"top":["深桑达A","北方国际","中钢国际","中工国际"]},{"code":"801726","name":"工程咨询服务Ⅱ","l1":"建筑装饰","n":40,"top":["甘咨询","*ST中设","华阳国际","地铁设计"]},{"code":"801731","name":"电机Ⅱ","l1":"电力设备","n":26,"top":["佳电股份","江特电机","方正电机","大洋电机"]},{"code":"801733","name":"其他电源设备Ⅱ","l1":"电力设备","n":32,"top":["同洲电子","*ST特迅","海陆重工","科华数据"]},{"code":"801735","name":"光伏设备","l1":"电力设备","n":67,"top":["国际实业","ST京机","欧晶科技","横店东磁"]},{"code":"801736","name":"风电设备","l1":"电力设备","n":31,"top":["和展能源","金风科技","大金重工","天顺风能"]},{"code":"801737","name":"电池","l1":"电力设备","n":97,"top":["中国宝安","德赛电池","滨海能源","豪鹏科技"]},{"code":"801738","name":"电网设备","l1":"电力设备","n":126,"top":["许继电气","顺钠股份","东方电子","新能泰山"]},{"code":"801741","name":"航天装备Ⅱ","l1":"国防军工","n":9,"top":["星网宇达","中天火箭","新余国科","中国卫星"]},{"code":"801742","name":"航空装备Ⅱ","l1":"国防军工","n":46,"top":["烽火电子","炼石航空","航发控制","中航西飞"]},{"code":"801743","name":"地面兵装Ⅱ","l1":"国防军工","n":12,"top":["中兵红箭","甘化科工","银河电子","ST应急"]},{"code":"801744","name":"航海装备Ⅱ","l1":"国防军工","n":10,"top":["天海防务","海兰信","江龙船艇","国瑞科技"]},{"code":"801745","name":"军工电子Ⅱ","l1":"国防军工","n":60,"top":["航天发展","振华科技","铖昌科技","航天电器"]},{"code":"801764","name":"游戏Ⅱ","l1":"传媒","n":26,"top":["游族网络","凯撒文化","恺英网络","三七互娱"]},{"code":"801765","name":"广告营销","l1":"传媒","n":28,"top":["华媒控股","智度股份","分众传媒","新华都"]},{"code":"801766","name":"影视院线","l1":"传媒","n":19,"top":["北京文化","欢瑞世纪","博纳影业","奥飞娱乐"]},{"code":"801767","name":"数字媒体","l1":"传媒","n":14,"top":["视觉中国","生意宝","*ST三六","芒果超媒"]},{"code":"801769","name":"出版","l1":"传媒","n":29,"top":["中原传媒","ST华闻","粤传媒","天舟文化"]},{"code":"801782","name":"国有大型银行Ⅱ","l1":"银行","n":6,"top":["农业银行","交通银行","工商银行","邮储银行"]},{"code":"801783","name":"股份制银行Ⅱ","l1":"银行","n":9,"top":["平安银行","浦发银行","华夏银行","民生银行"]},{"code":"801784","name":"城商行Ⅱ","l1":"银行","n":17,"top":["兰州银行","宁波银行","郑州银行","青岛银行"]},{"code":"801785","name":"农商行Ⅱ","l1":"银行","n":10,"top":["江阴银行","张家港行","青农商行","无锡银行"]},{"code":"801881","name":"摩托车及其他","l1":"汽车","n":16,"top":["钱江摩托","信隆健康","征和工业","久祺股份"]},{"code":"801951","name":"煤炭开采","l1":"煤炭","n":26,"top":["甘肃能化","新大洲A","冀中能源","山西焦煤"]},{"code":"801952","name":"焦炭Ⅱ","l1":"煤炭","n":7,"top":["美锦能源","安泰集团","云维股份","山西焦化"]},{"code":"801961","name":"油气开采Ⅱ","l1":"石油石化","n":4,"top":["蓝焰控股","ST洲际","新潮能源","中国海油"]},{"code":"801962","name":"油服工程","l1":"石油石化","n":13,"top":["*ST准油","惠博普","仁智股份","贝肯能源"]},{"code":"801963","name":"炼化及贸易","l1":"石油石化","n":30,"top":["华锦股份","广聚能源","东方盛虹","泰山石油"]},{"code":"801971","name":"环境治理","l1":"环保","n":104,"top":["中国天楹","华控赛格","中原环保","金圆股份"]},{"code":"801972","name":"环保设备Ⅱ","l1":"环保","n":26,"top":["创元科技","神雾节能","法尔胜","盈峰环境"]},{"code":"801981","name":"个护用品","l1":"美容护理","n":12,"top":["依依股份","登康口腔","中顺洁柔","百亚股份"]},{"code":"801982","name":"化妆品","l1":"美容护理","n":13,"top":["青岛金王","诺斯贝尔","水羊股份","锦盛新材"]},{"code":"801983","name":"医疗美容","l1":"美容护理","n":3,"top":["*ST美谷","爱美客","华熙生物"]},{"code":"801991","name":"航空机场","l1":"交通运输","n":12,"top":["深圳机场","中信海直","华夏航空","白云机场"]},{"code":"801992","name":"航运港口","l1":"交通运输","n":34,"top":["盐田港","凤凰航运","北部湾港","厦门港务"]},{"code":"801993","name":"旅游及景区","l1":"社会服务","n":25,"top":["张家界","岭南控股","天府文旅","*ST西旅"]},{"code":"801994","name":"教育","l1":"社会服务","n":17,"top":["学大教育","国脉科技","中公教育","凯文教育"]},{"code":"801995","name":"电视广播Ⅱ","l1":"传媒","n":14,"top":["华数传媒","湖北广电","电广传媒","天威视讯"]}];
+/* 注：原文件此处内嵌了一个 const SW = [...] 静态申万行业数组，共 11,233 字符
+   （占本文件 44,494 B 的 25%），已不再被任何代码引用 ——
+   f/g 数据全部来自后端 /api/v1/industries（审查报告 6.1 P1 / 6.3 P1）。已删除。 */
 
 /* ══════ 资金流（真实数据，来自后端 API）══════ */
-const API_BASE = (location.protocol === 'file:') ? 'http://127.0.0.1:8000' : '';
 let IND = [];
 let DATA_DATE = null;
+let META = null;
 
+/* 由 /industries 列表项构建内部结构。
+   ⚠ 关键修复（审查报告 6.1 P1）：原实现的 strength 恒定用 todayMain/turnover
+   （当日主力口径），完全不理周期选择器 —— 用户切到「10 日」后表格数字会变、
+   占比列却不变。现在按周期分别预计算 1/5/10 日口径的占比。 */
 function buildIND(list){
-  return list.map(x => ({
-    code: x.swCode, name: x.name, l1: x.l1Name, n: x.memberCount,
-    top: x.topStocks || [],
-    amt: x.turnover ?? 0,
-    f: {1: x.todayMain ?? 0, 5: x.main5d ?? 0, 10: x.main10d ?? 0},
-    strength: (x.turnover > 0) ? ((x.todayMain ?? 0) / x.turnover) : 0,
-  }));
+  return list.map(x => {
+    const amt = fnum(x.turnover, 0);
+    const f = {1: fnum(x.todayMain, 0), 5: fnum(x.main5d, 0), 10: fnum(x.main10d, 0)};
+    /* 净额（非主力）：用于表头「净流入」列的独立口径，避免与主力混淆 */
+    const nf = {1: fnum(x.todayNet, 0), 5: fnum(x.net5d, 0), 10: fnum(x.net10d, 0)};
+    /* 占比 = 该周期主力净额 ÷ 当日成交额（成交额只有当日值，故为近似口径，
+       这一点在界面上明确标注，不再让用户误以为它随周期精确变化） */
+    const ratio = {};
+    [1,5,10].forEach(function(p){ ratio[p] = amt > 0 ? f[p]/amt : null; });
+    return {
+      code: x.swCode, name: x.name, l1: x.l1Name, n: x.memberCount,
+      top: x.topStocks || [],
+      amt: amt,
+      f: f, nf: nf, ratio: ratio,
+      /* strength 保留为「当日」口径，兼容旧引用 */
+      strength: amt > 0 ? f[1]/amt : null
+    };
+  });
 }
 
 async function init(){
   const box = document.getElementById('treemap');
   try {
     const [listRes, metaRes] = await Promise.all([
-      fetch(`${API_BASE}/api/v1/industries?level=2&page_size=500`).then(r=>r.json()),
-      fetch(`${API_BASE}/api/v1/meta`).then(r=>r.json()),
+      api('/api/v1/industries?level=2&page_size=500'),
+      api('/api/v1/meta').catch(()=>null),
     ]);
-    if(listRes.code !== 0) throw new Error(listRes.msg || '数据接口错误');
-    IND = buildIND(listRes.data.list);
-    if(metaRes.code === 0 && metaRes.data && metaRes.data.dataEnd){
-      DATA_DATE = metaRes.data.dataEnd;
+    IND = buildIND(listRes.list || []);
+    if(metaRes && metaRes.dataEnd){
+      DATA_DATE = metaRes.dataEnd;
+      META = metaRes;
     }
     const live = document.getElementById('liveText');
     if(live) live.textContent = '真实数据' + (DATA_DATE ? ' · 数据日期 ' + DATA_DATE : '');
@@ -422,7 +453,8 @@ async function init(){
     }
     render();
   } catch(e){
-    box.innerHTML = `<div class="empty">数据加载失败：${e.message}<br>请确认后端服务已启动（127.0.0.1:8000）。</div>`;
+    box.innerHTML = '<div class="empty">数据加载失败：' + esc(e.message) + '<br>' +
+      '请确认后端服务已启动（127.0.0.1:8000）。</div>';
     const live = document.getElementById('liveText');
     if(live) live.textContent = '数据加载失败';
   }
@@ -430,11 +462,17 @@ async function init(){
 
 let period = 1, view = 'map', query = '';
 
-/* ══════ 工具 ══════ */
-const fmtAmt = v => (v>=0?'+':'') + v.toFixed(1);
-const fmtYi  = v => (v>=0?'+':'') + v.toFixed(2) + '亿';
-const cls    = v => v>0.02?'up':(v<-0.02?'down':'flat');
-const pctStr = v => (v>=0?'+':'') + v.toFixed(2) + '%';
+/* ══════ 工具 ══════
+   esc / fmtAmt / fmtYi / cls / pctStr 由 common.js 提供。
+   ⚠ 阈值修复（审查报告 6.7）：本页原来用 0.02，而 industry.html 与 admin.html
+   用 0.005 —— 同一个值在两张页面会被判成不同档位。现统一到 SW.THRESHOLD。 */
+
+/* 该周期下的占比（可能为 null＝成交额缺失） */
+function ratioOf(x){ const r = x.ratio[period]; return (r == null) ? null : r; }
+function ratioStr(x){
+  const r = ratioOf(x);
+  return r == null ? '—' : pctStr(r * 100);
+}
 
 /* 颜色档位（6 级） */
 const UP_STEPS=[['rgba(255,77,79,.16)','#ffd9d9'],['rgba(255,77,79,.28)','#ffd0d0'],
@@ -472,11 +510,16 @@ function renderMap(){
   if(!list.length){ box.innerHTML='<div class="empty">没有匹配的行业</div>'; return; }
 
   const maxAbs = Math.max(...list.map(i=>Math.abs(i.f[period])), 1);
+  /* ⚠ XSS 修复（审查报告 6.2.1）：本页原来完全没有转义助手（esc( 命中 0）。
+     这里尤其危险 —— title="..." 是**属性上下文**，未转义的引号可以闭合属性
+     并注入新属性/事件处理器，比纯文本注入更容易得手。 */
   box.innerHTML = `<div class="tile-grid">` + list.map(t=>{
     const v = t.f[period], [bg,fg] = tileColor(v, maxAbs);
-    return `<div class="tile" data-code="${t.code}" style="background:${bg};color:${fg}"
-      title="${t.name}　${fmtYi(v)}　${t.l1}">
-      <div class="tile-name">${t.name}</div>
+    const title = t.name + '　' + fmtYi(v) + '　' + t.l1;
+    return `<div class="tile" data-code="${escAttr(t.code)}" style="background:${bg};color:${fg}"
+      title="${escAttr(title)}" tabindex="0" role="button"
+      aria-label="${escAttr(title + '，' + ratioStr(t) + ' 净流入占比，查看详情')}">
+      <div class="tile-name">${esc(t.name)}</div>
       <div class="tile-flow">${fmtAmt(v)}</div>
     </div>`;
   }).join('') + `</div>`;
@@ -488,14 +531,13 @@ function renderTable(){
   const maxAbs = Math.max(...list.map(i=>Math.abs(i.f[period])), 1);
   document.getElementById('tbody').innerHTML = list.map((x,i)=>{
     const v = x.f[period], w = Math.min(Math.abs(v)/maxAbs*100,100);
-    return `<tr data-code="${x.code}">
+    return `<tr data-code="${escAttr(x.code)}" tabindex="0">
       <td class="rank">${i+1}</td>
-      <td><span class="ind-name">${x.name}</span><span class="ind-code">${x.code}</span></td>
-      <td><span class="l1-tag">${x.l1}</span></td>
-      <td class="num" style="color:var(--text-dim)">${x.n}</td>
+      <td><span class="ind-name">${esc(x.name)}</span><span class="ind-code">${esc(x.code)}</span></td>
+      <td><span class="l1-tag">${esc(x.l1)}</span></td>
+      <td class="num" style="color:var(--text-dim)">${fnum(x.n,0)}</td>
       <td class="num ${cls(v)}" style="font-weight:600">${fmtYi(v)}</td>
-      <td class="num ${cls(x.strength)}">${pctStr(x.strength*100)}</td>
-      
+      <td class="num ${cls(ratioOf(x))}">${ratioStr(x)}</td>
       <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:${w}%;background:${barColor(v)}"></div></div></td>
     </tr>`;
   }).join('');
@@ -522,37 +564,44 @@ function renderOverview(){
   const netEl = document.getElementById('ovNet');
   netEl.textContent = fmtYi(net);
   netEl.className = 'ov-val ' + cls(net);
+  /* ⚠ XSS 修复：best.name / worst.name 是上游来的行业名 */
   document.getElementById('ovExtreme').innerHTML =
-    `<span class="up">${best.name}</span> <span style="color:var(--text-dim);font-size:13px">/</span> <span class="down">${worst.name}</span>`;
+    `<span class="up">${esc(best.name)}</span> <span style="color:var(--text-dim);font-size:13px">/</span> <span class="down">${esc(worst.name)}</span>`;
   document.getElementById('ovExtremeSub').textContent =
     `${fmtAmt(best.f[period])}亿 / ${fmtAmt(worst.f[period])}亿`;
 }
 
 /* ══════ 抽屉 ══════ */
+let _lastFocus = null;
 function openDrawer(code){
   const x = IND.find(i=>i.code===code); if(!x) return;
   const v = x.f[period];
   document.getElementById('dTitle').textContent = x.name;
+  /* ⚠ XSS 修复（审查报告 6.2.1）：整段原来零转义，包括第 549 行的成分股名
+     （来自 t_stock_basic.name，同样源自明文 HTTP 上游）。 */
   document.getElementById('dMeta').innerHTML =
-    `<span class="l1-tag">${x.l1}</span><span class="num">${x.code}</span><span>成分股 ${x.n} 只</span>`;
+    `<span class="l1-tag">${esc(x.l1)}</span><span class="num">${esc(x.code)}</span><span>成分股 ${fnum(x.n,0)} 只</span>`;
+  const r = ratioOf(x);
   document.getElementById('dBody').innerHTML = `
     <div class="flow-big ${cls(v)}">${fmtYi(v)}</div>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:20px">
       ${period===1?'今日':period+'日'}主力净流入
     </div>
-    
-    <div class="kv"><span class="k">净流入占比</span><span class="v ${cls(x.strength)}">${pctStr(x.strength*100)}</span></div>
-    <div class="kv"><span class="k">成交额（估）</span><span class="v">${x.amt.toFixed(1)} 亿</span></div>
-    <div class="kv"><span class="k">5日净流入</span><span class="v ${cls(x.f[5])}">${fmtYi(x.f[5])}</span></div>
-    <div class="kv"><span class="k">10日净流入</span><span class="v ${cls(x.f[10])}">${fmtYi(x.f[10])}</span></div>
+
+    <div class="kv"><span class="k">净流入占比（${period===1?'今日':period+'日'}主力 ÷ 当日成交额）</span><span class="v ${cls(r)}">${r==null?'—':pctStr(r*100)}</span></div>
+    <div class="kv"><span class="k">成交额（当日）</span><span class="v">${numToFixed(x.amt,1)} 亿</span></div>
+    <div class="kv"><span class="k">净流入（非主力口径）</span><span class="v ${cls(x.nf[period])}">${fmtYi(x.nf[period])}</span></div>
+    <div class="kv"><span class="k">主力·5 日</span><span class="v ${cls(x.f[5])}">${fmtYi(x.f[5])}</span></div>
+    <div class="kv"><span class="k">主力·10 日</span><span class="v ${cls(x.f[10])}">${fmtYi(x.f[10])}</span></div>
     <div class="sec-t">代表个股</div>
-    <div class="chips">${x.top.map(t=>`<span class="chip">${t}</span>`).join('')}</div>
+    <div class="chips">${x.top.map(t=>`<span class="chip">${esc(t)}</span>`).join('')}</div>
     <div class="sec-t">归属</div>
-    <div class="kv"><span class="k">一级行业</span><span class="v">${x.l1}</span></div>
-    <div class="kv"><span class="k">二级代码</span><span class="v">${x.code}</span></div>
+    <div class="kv"><span class="k">一级行业</span><span class="v">${esc(x.l1)}</span></div>
+    <div class="kv"><span class="k">二级代码</span><span class="v">${esc(x.code)}</span></div>
   `;
   const link = document.getElementById('dClassLink');
-  if(link) link.href = 'industry.html?ind=' + encodeURIComponent(code) + '&name=' + encodeURIComponent(x.name);
+  if(link) link.href = 'industry.html?ind=' + escUrl(code) + '&name=' + escUrl(x.name);
+  _lastFocus = document.activeElement;
   document.getElementById('drawer').classList.add('open');
   document.getElementById('scrim').classList.add('open');
   document.getElementById('dClose').focus();
@@ -560,6 +609,23 @@ function openDrawer(code){
 function closeDrawer(){
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('scrim').classList.remove('open');
+  /* 焦点恢复（审查报告 6.5 P2：本页抽屉原缺焦点陷阱/恢复，可对照 industry.html 正例） */
+  if(_lastFocus && _lastFocus.isConnected) _lastFocus.focus();
+  _lastFocus = null;
+}
+
+/* 焦点陷阱：抽屉打开时 Tab 循环限制在抽屉内 */
+function trapFocus(e){
+  if(e.key !== 'Tab') return;
+  const drawer = document.getElementById('drawer');
+  if(!drawer.classList.contains('open')) return;
+  const focusables = [...drawer.querySelectorAll(
+    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  )].filter(el => el.offsetParent !== null);
+  if(!focusables.length) return;
+  const first = focusables[0], last = focusables[focusables.length-1];
+  if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+  else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
 }
 
 /* ══════ 渲染调度 ══════ */
@@ -578,6 +644,10 @@ document.getElementById('periodSeg').addEventListener('click', e=>{
   [...e.currentTarget.children].forEach(x=>x.setAttribute('aria-pressed', String(x===b)));
   document.getElementById('tableSub').textContent =
     `按${period===1?'今日':period+'日'}主力净流入排序`;
+  /* 表头与占比列同步标注周期 —— 占比现在跟随所选周期（审查报告 6.1 P1） */
+  const ths = document.querySelectorAll('#tablePanel thead th');
+  if(ths[4]) ths[4].textContent = (period===1?'今日':period+'日') + '主力净流入';
+  if(ths[5]) ths[5].textContent = '净流入占比';
   render();
 });
 document.getElementById('viewSeg').addEventListener('click', e=>{
@@ -587,7 +657,8 @@ document.getElementById('viewSeg').addEventListener('click', e=>{
   document.getElementById('mapPanel').hidden = view!=='map';
   document.getElementById('tablePanel').hidden = view!=='table';
   render();
-  if(view==='map') requestAnimationFrame(renderMap);
+  /* 原实现在切到地图时重复渲染两次（render 内已经 renderMap，这里又调一次，
+     见审查报告 6.3 P2）。已删除多余的这一次。 */
 });
 
 let tq;
@@ -596,14 +667,30 @@ document.getElementById('q').addEventListener('input', e=>{
   tq = setTimeout(()=>{ query = e.target.value; render(); }, 120);
 });
 
+/* 键盘可操作性（审查报告 6.5 P2）：热力图 tile 与表格行原来只能点击，
+   无法用键盘操作。现在它们带 tabindex 与 role="button"，并支持 Enter / Space。 */
+function activate(e, node){
+  if(!node) return;
+  if(e.type === 'click' || e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar'){
+    if(e.type === 'keydown') e.preventDefault();
+    openDrawer(node.dataset.code);
+  }
+}
 document.getElementById('treemap').addEventListener('click', e=>{
-  const t = e.target.closest('.tile'); if(t) openDrawer(t.dataset.code);
+  activate(e, e.target.closest('.tile'));
+});
+document.getElementById('treemap').addEventListener('keydown', e=>{
+  activate(e, e.target.closest('.tile'));
 });
 document.getElementById('tbody').addEventListener('click', e=>{
-  const t = e.target.closest('tr'); if(t) openDrawer(t.dataset.code);
+  activate(e, e.target.closest('tr'));
+});
+document.getElementById('tbody').addEventListener('keydown', e=>{
+  activate(e, e.target.closest('tr'));
 });
 document.getElementById('dClose').addEventListener('click', closeDrawer);
 document.getElementById('scrim').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', trapFocus);
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeDrawer(); });
 
 

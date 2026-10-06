@@ -4,9 +4,29 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>申万行业分类 · 行业与个股浏览</title>
+<meta name="description" content="申万一级 / 二级 / 三级行业分类浏览，含行业与个股真实资金流、四档资金流向与相对强度指标。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%235e6ad2'/%3E%3Cpath d='M8 21l5-7 5 4 6-9' stroke='%23fff' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- 共享层：转义 / API 封装 / 色板阈值（审查报告 8.12，三页共用同一份实现） -->
+<script src="common.js"></script>
+<!-- CSP 兜底防线（审查报告 9.3-1 第 4 步）
+     ⚠ 实测修正：审查报告建议的 script-src 收紧为同源，在本项目**会直接白屏** ——
+     本页全部业务逻辑就是一个大内联脚本块，同源策略会把它自己拦掉
+     （2026-10-06 用无头 Edge 实测：控制台报 “Executing inline script violates
+     the following Content Security Policy directive”，页面 0 个行业节点）。
+     因此这里只保留**确实能加固、且不会自伤**的指令：
+       · object-src none      —— 封掉插件类注入（object / embed 标签）
+       · base-uri self        —— 封掉 base 标签劫持（改写相对 URL 的经典手法）
+       · form-action self     —— 封掉表单外发（防凭据外泄）
+       · default-src self + 各资源域白名单 —— 封掉第三方资源加载
+     script-src 显式带上 unsafe-inline：这是「单文件内联脚本、无构建步骤」
+     的必然代价。若要走 hash/nonce 方案，每次编辑页面都会使 hash 失效
+     → 页面静默白屏，代价高于收益。
+     真正严格的 script-src 应由**反向代理层用 nonce 下发 HTTP 头**实现，
+     见 docs/07 的「残余风险与后续建议」。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' http://127.0.0.1:8000; object-src 'none'; base-uri 'self'; form-action 'self'">
 <style>
 :root{
   --bg:#0a0b0d; --bg-elev:#101114; --surface:#16181c; --surface-2:#1c1f24; --surface-3:#23272d;
@@ -99,6 +119,13 @@ main{max-width:1400px;margin:0 auto;padding:18px 20px 40px}
 .tag-l3{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;
   background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);flex:none}
 
+/* ── 「未细分到三级」虚拟分组 ──
+   非真实申万行业，视觉上弱化以区别于三级节点：虚线左缘 + 斜体标签。
+   该节点没有 flow-btn（见 renderTree 注释）。 */
+.l3.gap > .l3-head .l3-name{color:var(--text-dim);font-style:italic}
+.l3.gap > .l3-head{border-left:2px dashed var(--border-strong)}
+.tag-gap{font-style:normal;background:transparent;border-style:dashed;color:var(--text-dim)}
+
 /* 股票网格 */
 .stocks{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
   gap:1px;background:var(--bg-elev);border-top:1px solid var(--border)}
@@ -114,6 +141,17 @@ main{max-width:1400px;margin:0 auto;padding:18px 20px 40px}
 mark{background:rgba(94,106,210,.3);color:#cfd4ff;border-radius:2px;padding:0 1px}
 .stub-empty{padding:14px 20px 14px 74px;color:var(--text-dim);font-size:12.5px}
 .empty{padding:56px 20px;text-align:center;color:var(--text-dim);font-size:13px}
+/* 搜索命中数被后端 page_size 截断时的提示（审查报告 6.1 P0） */
+.trunc-note{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:3px;
+  background:var(--accent-dim);border:1px solid var(--accent-line);color:#a9b0e0;font-size:11.5px}
+/* 搜索失败提示（不再空吞异常，审查报告 6.5 P2） */
+.err-note{color:var(--up)}
+/* 成分股加载失败后的重试按钮（审查报告 6.1 P1） */
+.stub-empty .retry{margin-left:10px;padding:2px 10px;border-radius:4px;font-size:12px;
+  border:1px solid var(--accent-line);color:#a9b0e0;background:var(--accent-dim);
+  transition:background-color .15s var(--ease),border-color .15s var(--ease)}
+.stub-empty .retry:hover{background:rgba(94,106,210,.24);border-color:var(--accent)}
+.stub-empty .retry:active{transform:translateY(1px)}
 
 /* 抽屉 */
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:100;opacity:0;
@@ -327,21 +365,9 @@ footer{border-top:1px solid var(--border);padding:22px 0;font-size:12px;color:va
   .sum{grid-template-columns:1fr}
   .drawer{width:100%}
 }
-.flow-btn{font-size:11px;padding:2px 8px;border-radius:100px;border:1px solid var(--border);
-  color:var(--text-dim);background:var(--surface);flex:none;transition:all .15s var(--ease);cursor:pointer}
-.flow-btn:hover{border-color:var(--accent-line);color:#a9b0e0;background:var(--accent-dim)}
-.flow-btn.active{border-color:var(--accent-line);color:#c3c8f0;background:var(--accent-dim)}
-.mode-badge{display:inline-block;padding:2px 8px;border-radius:100px;font-size:11px;
-  background:var(--accent-dim);border:1px solid var(--accent-line);color:#a9b0e0;flex:none}
-.comp-list{margin-top:8px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;max-height:320px;overflow-y:auto}
-.comp-item{display:flex;align-items:center;gap:10px;padding:8px 13px;background:var(--surface);
-  border-bottom:1px solid var(--border);width:100%;text-align:left;transition:background-color .14s var(--ease)}
-.comp-item:last-child{border-bottom:none}
-.comp-item:hover{background:var(--surface-2)}
-.comp-rank{font-family:var(--mono);font-size:11px;color:var(--text-dim);width:22px;flex:none}
-.comp-code{font-family:var(--mono);font-size:11.5px;color:var(--text-dim);flex:none}
-.comp-name{font-size:12.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.comp-val{font-family:var(--mono);font-size:12.5px;font-weight:500;flex:none}
+
+/* 注：原文件在此处重复了一整段 .flow-btn / .mode-badge / .comp-* 规则
+   （与上方第 172-186 行逐字相同，审查报告 6.5 P2「CSS 重复」）。已删除。 */
 /* P2 排名对比样式 */
 .metric-wide{grid-column:1 / -1}
 .rank-wrap{display:flex;align-items:center;gap:16px}
@@ -505,88 +531,227 @@ footer{border-top:1px solid var(--border);padding:22px 0;font-size:12px;color:va
 </div>
 <script>
 /* ═══════════ 数据 ═══════════ */
-const TREE = [{"c":"801010","n":"农林牧渔","l2":[{"c":"801011","n":"林业Ⅱ","l3":[{"c":"850131","n":"林业Ⅲ","k":4}]},{"c":"801012","n":"农产品加工","l3":[{"c":"850151","n":"果蔬加工","k":5},{"c":"850152","n":"粮油加工","k":7},{"c":"850154","n":"其他农产品加工","k":11}]},{"c":"801014","n":"饲料","l3":[{"c":"850142","n":"畜禽饲料","k":11},{"c":"850143","n":"水产饲料","k":4},{"c":"850144","n":"宠物食品","k":3}]},{"c":"801015","n":"渔业","l3":[{"c":"850121","n":"海洋捕捞","k":2},{"c":"850122","n":"水产养殖","k":4}]},{"c":"801016","n":"种植业","l3":[{"c":"850111","n":"种子","k":8},{"c":"850112","n":"粮食种植","k":2},{"c":"850113","n":"其他种植业","k":6},{"c":"850114","n":"食用菌","k":4}]},{"c":"801017","n":"养殖业","l3":[{"c":"850172","n":"生猪养殖","k":11},{"c":"850173","n":"肉鸡养殖","k":8},{"c":"850174","n":"其他养殖","k":3}]},{"c":"801018","n":"动物保健Ⅱ","l3":[{"c":"850181","n":"动物保健Ⅲ","k":9}]},{"c":"801019","n":"农业综合Ⅱ","l3":[{"c":"850191","n":"农业综合Ⅲ","k":2}]}]},{"c":"801030","n":"基础化工","l2":[{"c":"801032","n":"化学纤维","l3":[{"c":"850341","n":"涤纶","k":10},{"c":"850343","n":"粘胶","k":3},{"c":"850344","n":"其他化学纤维","k":7},{"c":"850345","n":"氨纶","k":1},{"c":"850346","n":"锦纶","k":5}]},{"c":"801033","n":"化学原料","l3":[{"c":"850321","n":"纯碱","k":5},{"c":"850322","n":"氯碱","k":14},{"c":"850323","n":"无机盐","k":10},{"c":"850324","n":"其他化学原料","k":14},{"c":"850325","n":"煤化工","k":8},{"c":"850326","n":"钛白粉","k":6}]},{"c":"801034","n":"化学制品","l3":[{"c":"850135","n":"食品及饲料添加剂","k":23},{"c":"850136","n":"有机硅","k":10},{"c":"850137","n":"胶黏剂及胶带","k":5},{"c":"850335","n":"涂料油墨","k":17},{"c":"850337","n":"民爆制品","k":13},{"c":"850338","n":"纺织化学制品","k":13},{"c":"850339","n":"其他化学制品","k":73},{"c":"850372","n":"聚氨酯","k":8},{"c":"850382","n":"氟化工","k":10}]},{"c":"801036","n":"塑料","l3":[{"c":"850351","n":"其他塑料制品","k":19},{"c":"850353","n":"改性塑料","k":18},{"c":"850354","n":"合成树脂","k":14},{"c":"850355","n":"膜材料","k":21}]},{"c":"801037","n":"橡胶","l3":[{"c":"850362","n":"其他橡胶制品","k":9},{"c":"850363","n":"炭黑","k":6},{"c":"850364","n":"橡胶助剂","k":2}]},{"c":"801038","n":"农化制品","l3":[{"c":"850331","n":"氮肥","k":6},{"c":"850332","n":"磷肥及磷化工","k":9},{"c":"850333","n":"农药","k":30},{"c":"850336","n":"钾肥","k":4},{"c":"850381","n":"复合肥","k":10}]},{"c":"801039","n":"非金属材料Ⅱ","l3":[{"c":"850523","n":"非金属材料Ⅲ","k":8}]}]},{"c":"801040","n":"钢铁","l2":[{"c":"801043","n":"冶钢原料","l3":[{"c":"850431","n":"铁矿石","k":7},{"c":"850432","n":"冶钢辅料","k":3}]},{"c":"801044","n":"普钢","l3":[{"c":"850441","n":"长材","k":3},{"c":"850442","n":"板材","k":16},{"c":"850443","n":"钢铁管材","k":3}]},{"c":"801045","n":"特钢Ⅱ","l3":[{"c":"850412","n":"特钢Ⅲ","k":12}]}]},{"c":"801050","n":"有色金属","l2":[{"c":"801051","n":"金属新材料","l3":[{"c":"850521","n":"其他金属新材料","k":17},{"c":"850522","n":"磁性材料","k":15}]},{"c":"801053","n":"贵金属","l3":[{"c":"850531","n":"黄金","k":10},{"c":"850532","n":"白银","k":1}]},{"c":"801054","n":"小金属","l3":[{"c":"850541","n":"稀土","k":5},{"c":"850542","n":"钨","k":4},{"c":"850544","n":"其他小金属","k":15},{"c":"850545","n":"钼","k":3}]},{"c":"801055","n":"工业金属","l3":[{"c":"850551","n":"铝","k":30},{"c":"850552","n":"铜","k":17},{"c":"850553","n":"铅锌","k":12}]},{"c":"801056","n":"能源金属","l3":[{"c":"850543","n":"锂","k":7},{"c":"850561","n":"钴","k":3},{"c":"850562","n":"镍","k":1}]}]},{"c":"801080","n":"电子","l2":[{"c":"801081","n":"半导体","l3":[{"c":"850812","n":"分立器件","k":18},{"c":"850813","n":"半导体材料","k":26},{"c":"850814","n":"数字芯片设计","k":55},{"c":"850815","n":"模拟芯片设计","k":36},{"c":"850816","n":"集成电路制造","k":7},{"c":"850817","n":"集成电路封测","k":13},{"c":"850818","n":"半导体设备","k":26}]},{"c":"801082","n":"其他电子Ⅱ","l3":[{"c":"850841","n":"其他电子Ⅲ","k":33}]},{"c":"801083","n":"元件","l3":[{"c":"850822","n":"印制电路板","k":46},{"c":"850823","n":"被动元件","k":15}]},{"c":"801084","n":"光学光电子","l3":[{"c":"850831","n":"面板","k":38},{"c":"850832","n":"LED","k":30},{"c":"850833","n":"光学元件","k":25}]},{"c":"801085","n":"消费电子","l3":[{"c":"850853","n":"品牌消费电子","k":10},{"c":"850854","n":"消费电子零部件及组装","k":81}]},{"c":"801086","n":"电子化学品Ⅱ","l3":[{"c":"850861","n":"电子化学品Ⅲ","k":35}]}]},{"c":"801110","n":"家用电器","l2":[{"c":"801111","n":"白色家电","l3":[{"c":"851112","n":"空调","k":4},{"c":"851116","n":"冰洗","k":7}]},{"c":"801112","n":"黑色家电","l3":[{"c":"851121","n":"彩电","k":4},{"c":"851122","n":"其他黑色家电","k":5}]},{"c":"801113","n":"小家电","l3":[{"c":"851131","n":"厨房小家电","k":9},{"c":"851132","n":"清洁小家电","k":8},{"c":"851133","n":"个护小家电","k":3}]},{"c":"801114","n":"厨卫电器","l3":[{"c":"851141","n":"厨房电器","k":6},{"c":"851142","n":"卫浴电器","k":3}]},{"c":"801115","n":"照明设备Ⅱ","l3":[{"c":"851151","n":"照明设备Ⅲ","k":12}]},{"c":"801116","n":"家电零部件Ⅱ","l3":[{"c":"851161","n":"家电零部件Ⅲ","k":29}]},{"c":"801117","n":"其他家电Ⅱ","l3":[{"c":"851171","n":"其他家电Ⅲ","k":3}]}]},{"c":"801120","n":"食品饮料","l2":[{"c":"801124","n":"食品加工","l3":[{"c":"851241","n":"肉制品","k":7},{"c":"851246","n":"预加工食品","k":10},{"c":"851247","n":"保健品","k":8}]},{"c":"801125","n":"白酒Ⅱ","l3":[{"c":"851251","n":"白酒Ⅲ","k":19}]},{"c":"801126","n":"非白酒","l3":[{"c":"851232","n":"啤酒","k":7},{"c":"851233","n":"其他酒类","k":9}]},{"c":"801127","n":"饮料乳品","l3":[{"c":"851243","n":"乳品","k":18},{"c":"851271","n":"软饮料","k":8}]},{"c":"801128","n":"休闲食品","l3":[{"c":"851281","n":"零食","k":10},{"c":"851282","n":"烘焙食品","k":9},{"c":"851283","n":"熟食","k":3}]},{"c":"801129","n":"调味发酵品Ⅱ","l3":[{"c":"851242","n":"调味发酵品Ⅲ","k":14}]}]},{"c":"801130","n":"纺织服饰","l2":[{"c":"801131","n":"纺织制造","l3":[{"c":"851312","n":"棉纺","k":8},{"c":"851314","n":"印染","k":4},{"c":"851315","n":"辅料","k":3},{"c":"851316","n":"其他纺织","k":16},{"c":"851317","n":"纺织鞋类制造","k":1}]},{"c":"801132","n":"服装家纺","l3":[{"c":"851325","n":"鞋帽及其他","k":11},{"c":"851326","n":"家纺","k":6},{"c":"851328","n":"运动服装","k":4},{"c":"851329","n":"非运动服装","k":38}]},{"c":"801133","n":"饰品","l3":[{"c":"851331","n":"钟表珠宝","k":13},{"c":"851333","n":"其他饰品","k":2}]}]},{"c":"801140","n":"轻工制造","l2":[{"c":"801141","n":"包装印刷","l3":[{"c":"851422","n":"印刷","k":3},{"c":"851423","n":"金属包装","k":7},{"c":"851424","n":"塑料包装","k":6},{"c":"851425","n":"纸包装","k":19},{"c":"851426","n":"综合包装","k":5}]},{"c":"801142","n":"家居用品","l3":[{"c":"851436","n":"瓷砖地板","k":13},{"c":"851437","n":"成品家居","k":16},{"c":"851438","n":"定制家居","k":13},{"c":"851439","n":"卫浴制品","k":7},{"c":"851491","n":"其他家居用品","k":24}]},{"c":"801143","n":"造纸","l3":[{"c":"851412","n":"大宗用纸","k":11},{"c":"851413","n":"特种纸","k":12}]},{"c":"801145","n":"文娱用品","l3":[{"c":"851451","n":"文化用品","k":5},{"c":"851452","n":"娱乐用品","k":15}]}]},{"c":"801150","n":"医药生物","l2":[{"c":"801151","n":"化学制药","l3":[{"c":"851511","n":"原料药","k":42},{"c":"851512","n":"化学制剂","k":107}]},{"c":"801152","n":"生物制品","l3":[{"c":"851522","n":"血液制品","k":7},{"c":"851523","n":"疫苗","k":12},{"c":"851524","n":"其他生物制品","k":32}]},{"c":"801153","n":"医疗器械","l3":[{"c":"851532","n":"医疗设备","k":40},{"c":"851533","n":"医疗耗材","k":51},{"c":"851534","n":"体外诊断","k":38}]},{"c":"801154","n":"医药商业","l3":[{"c":"851542","n":"医药流通","k":24},{"c":"851543","n":"线下药店","k":8}]},{"c":"801155","n":"中药Ⅱ","l3":[{"c":"851521","n":"中药Ⅲ","k":66}]},{"c":"801156","n":"医疗服务","l3":[{"c":"851562","n":"诊断服务","k":5},{"c":"851563","n":"医疗研发外包","k":29},{"c":"851564","n":"医院","k":15},{"c":"851565","n":"其他医疗服务","k":2}]}]},{"c":"801160","n":"公用事业","l2":[{"c":"801161","n":"电力","l3":[{"c":"851610","n":"电能综合服务","k":16},{"c":"851611","n":"火力发电","k":29},{"c":"851612","n":"水力发电","k":12},{"c":"851614","n":"热力服务","k":19},{"c":"851616","n":"光伏发电","k":13},{"c":"851617","n":"风力发电","k":16},{"c":"851618","n":"核力发电","k":3},{"c":"851619","n":"其他能源发电","k":1}]},{"c":"801163","n":"燃气Ⅱ","l3":[{"c":"851631","n":"燃气Ⅲ","k":28}]}]},{"c":"801170","n":"交通运输","l2":[{"c":"801178","n":"物流","l3":[{"c":"851782","n":"原材料供应链服务","k":13},{"c":"851783","n":"中间产品及消费品供应链服务","k":8},{"c":"851784","n":"快递","k":4},{"c":"851785","n":"跨境物流","k":12},{"c":"851786","n":"仓储物流","k":6},{"c":"851787","n":"公路货运","k":4}]},{"c":"801179","n":"铁路公路","l3":[{"c":"851721","n":"公交","k":6},{"c":"851731","n":"高速公路","k":20},{"c":"851771","n":"铁路运输","k":7}]},{"c":"801991","n":"航空机场","l3":[{"c":"851741","n":"航空运输","k":8},{"c":"851751","n":"机场","k":4}]},{"c":"801992","n":"航运港口","l3":[{"c":"851711","n":"港口","k":16},{"c":"851761","n":"航运","k":18}]}]},{"c":"801180","n":"房地产","l2":[{"c":"801181","n":"房地产开发","l3":[{"c":"851811","n":"住宅开发","k":63},{"c":"851812","n":"商业地产","k":10},{"c":"851813","n":"产业地产","k":10}]},{"c":"801183","n":"房地产服务","l3":[{"c":"851831","n":"物业管理","k":8},{"c":"851832","n":"房产租赁经纪","k":3},{"c":"851833","n":"房地产综合服务","k":1}]}]},{"c":"801200","n":"商贸零售","l2":[{"c":"801202","n":"贸易Ⅱ","l3":[{"c":"852021","n":"贸易Ⅲ","k":12}]},{"c":"801203","n":"一般零售","l3":[{"c":"852031","n":"百货","k":20},{"c":"852032","n":"超市","k":8},{"c":"852033","n":"多业态零售","k":15},{"c":"852034","n":"商业物业经营","k":17}]},{"c":"801204","n":"专业连锁Ⅱ","l3":[{"c":"852041","n":"专业连锁Ⅲ","k":7}]},{"c":"801206","n":"互联网电商","l3":[{"c":"852061","n":"综合电商","k":3},{"c":"852062","n":"跨境电商","k":7},{"c":"852063","n":"电商服务","k":8}]},{"c":"801207","n":"旅游零售Ⅱ","l3":[{"c":"852071","n":"旅游零售Ⅲ","k":2}]}]},{"c":"801210","n":"社会服务","l2":[{"c":"801216","n":"体育Ⅱ","l3":[{"c":"852161","n":"体育Ⅲ","k":2}]},{"c":"801218","n":"专业服务","l3":[{"c":"852181","n":"人力资源服务","k":3},{"c":"852182","n":"检测服务","k":19},{"c":"852183","n":"会展服务","k":3},{"c":"852184","n":"其他专业服务","k":4}]},{"c":"801219","n":"酒店餐饮","l3":[{"c":"852121","n":"酒店","k":5},{"c":"852141","n":"餐饮","k":4}]},{"c":"801993","n":"旅游及景区","l3":[{"c":"852111","n":"人工景区","k":5},{"c":"852112","n":"自然景区","k":13},{"c":"852131","n":"旅游综合","k":7}]},{"c":"801994","n":"教育","l3":[{"c":"859851","n":"学历教育","k":2},{"c":"859852","n":"培训教育","k":13},{"c":"859853","n":"教育运营及其他","k":2}]}]},{"c":"801230","n":"综合","l2":[{"c":"801231","n":"综合Ⅱ","l3":[{"c":"852311","n":"综合Ⅲ","k":20}]}]},{"c":"801710","n":"建筑材料","l2":[{"c":"801711","n":"水泥","l3":[{"c":"857111","n":"水泥制造","k":14},{"c":"857112","n":"水泥制品","k":7}]},{"c":"801712","n":"玻璃玻纤","l3":[{"c":"857121","n":"玻璃制造","k":7},{"c":"857122","n":"玻纤制造","k":9}]},{"c":"801713","n":"装修建材","l3":[{"c":"850614","n":"其他建材","k":17},{"c":"850615","n":"耐火材料","k":6},{"c":"850616","n":"管材","k":7},{"c":"850617","n":"防水材料","k":3},{"c":"850618","n":"涂料","k":2}]}]},{"c":"801720","n":"建筑装饰","l2":[{"c":"801721","n":"房屋建设Ⅱ","l3":[{"c":"850623","n":"房屋建设Ⅲ","k":8}]},{"c":"801722","n":"装修装饰Ⅱ","l3":[{"c":"857221","n":"装修装饰Ⅲ","k":22}]},{"c":"801723","n":"基础建设","l3":[{"c":"857236","n":"基建市政工程","k":25},{"c":"857251","n":"园林工程","k":15}]},{"c":"801724","n":"专业工程","l3":[{"c":"857241","n":"钢结构","k":9},{"c":"857242","n":"化学工程","k":7},{"c":"857243","n":"国际工程","k":4},{"c":"857244","n":"其他专业工程","k":17}]},{"c":"801726","n":"工程咨询服务Ⅱ","l3":[{"c":"857261","n":"工程咨询服务Ⅲ","k":40}]}]},{"c":"801730","n":"电力设备","l2":[{"c":"801731","n":"电机Ⅱ","l3":[{"c":"850741","n":"电机Ⅲ","k":26}]},{"c":"801733","n":"其他电源设备Ⅱ","l3":[{"c":"857331","n":"综合电力设备商","k":2},{"c":"857334","n":"火电设备","k":3},{"c":"857336","n":"其他电源设备Ⅲ","k":27}]},{"c":"801735","n":"光伏设备","l3":[{"c":"857351","n":"硅料硅片","k":7},{"c":"857352","n":"光伏电池组件","k":22},{"c":"857353","n":"逆变器","k":10},{"c":"857354","n":"光伏辅材","k":18},{"c":"857355","n":"光伏加工设备","k":10}]},{"c":"801736","n":"风电设备","l3":[{"c":"857361","n":"风电整机","k":5},{"c":"857362","n":"风电零部件","k":26}]},{"c":"801737","n":"电池","l3":[{"c":"857371","n":"锂电池","k":27},{"c":"857372","n":"电池化学品","k":42},{"c":"857373","n":"锂电专用设备","k":18},{"c":"857374","n":"燃料电池","k":1},{"c":"857375","n":"蓄电池及其他电池","k":9}]},{"c":"801738","n":"电网设备","l3":[{"c":"857321","n":"电网自动化设备","k":26},{"c":"857323","n":"电工仪器仪表","k":13},{"c":"857344","n":"线缆部件及其他","k":35},{"c":"857381","n":"输变电设备","k":27},{"c":"857382","n":"配电设备","k":25}]}]},{"c":"801740","n":"国防军工","l2":[{"c":"801741","n":"航天装备Ⅱ","l3":[{"c":"857411","n":"航天装备Ⅲ","k":9}]},{"c":"801742","n":"航空装备Ⅱ","l3":[{"c":"857421","n":"航空装备Ⅲ","k":46}]},{"c":"801743","n":"地面兵装Ⅱ","l3":[{"c":"857431","n":"地面兵装Ⅲ","k":12}]},{"c":"801744","n":"航海装备Ⅱ","l3":[{"c":"850935","n":"航海装备Ⅲ","k":10}]},{"c":"801745","n":"军工电子Ⅱ","l3":[{"c":"857451","n":"军工电子Ⅲ","k":60}]}]},{"c":"801750","n":"计算机","l2":[{"c":"801101","n":"计算机设备","l3":[{"c":"850702","n":"安防设备","k":23},{"c":"850703","n":"其他计算机设备","k":59}]},{"c":"801103","n":"IT服务Ⅱ","l3":[{"c":"852226","n":"IT服务Ⅲ","k":122}]},{"c":"801104","n":"软件开发","l3":[{"c":"851041","n":"垂直应用软件","k":96},{"c":"851042","n":"横向通用软件","k":34}]}]},{"c":"801760","n":"传媒","l2":[{"c":"801764","n":"游戏Ⅱ","l3":[{"c":"857641","n":"游戏Ⅲ","k":26}]},{"c":"801765","n":"广告营销","l3":[{"c":"857651","n":"营销代理","k":25},{"c":"857652","n":"广告媒体","k":3}]},{"c":"801766","n":"影视院线","l3":[{"c":"857661","n":"影视动漫制作","k":15},{"c":"857662","n":"院线","k":4}]},{"c":"801767","n":"数字媒体","l3":[{"c":"857671","n":"视频媒体","k":1},{"c":"857673","n":"图片媒体","k":1},{"c":"857674","n":"门户网站","k":8},{"c":"857675","n":"文字媒体","k":1},{"c":"857676","n":"其他数字媒体","k":3}]},{"c":"801769","n":"出版","l3":[{"c":"857691","n":"教育出版","k":10},{"c":"857692","n":"大众出版","k":19}]},{"c":"801995","n":"电视广播Ⅱ","l3":[{"c":"859951","n":"电视广播Ⅲ","k":14}]}]},{"c":"801770","n":"通信","l2":[{"c":"801102","n":"通信设备","l3":[{"c":"851024","n":"通信网络设备及器件","k":35},{"c":"851025","n":"通信线缆及配套","k":12},{"c":"851026","n":"通信终端及配件","k":27},{"c":"851027","n":"其他通信设备","k":11}]},{"c":"801223","n":"通信服务","l3":[{"c":"852212","n":"电信运营商","k":3},{"c":"852213","n":"通信工程及服务","k":17},{"c":"852214","n":"通信应用增值服务","k":17}]}]},{"c":"801780","n":"银行","l2":[{"c":"801782","n":"国有大型银行Ⅱ","l3":[{"c":"857821","n":"国有大型银行Ⅲ","k":6}]},{"c":"801783","n":"股份制银行Ⅱ","l3":[{"c":"857831","n":"股份制银行Ⅲ","k":9}]},{"c":"801784","n":"城商行Ⅱ","l3":[{"c":"857841","n":"城商行Ⅲ","k":17}]},{"c":"801785","n":"农商行Ⅱ","l3":[{"c":"857851","n":"农商行Ⅲ","k":10}]}]},{"c":"801790","n":"非银金融","l2":[{"c":"801191","n":"多元金融","l3":[{"c":"851922","n":"金融控股","k":8},{"c":"851923","n":"期货","k":4},{"c":"851924","n":"信托","k":3},{"c":"851925","n":"租赁","k":3},{"c":"851926","n":"金融信息服务","k":2},{"c":"851927","n":"资产管理","k":4}]},{"c":"801193","n":"证券Ⅱ","l3":[{"c":"851931","n":"证券Ⅲ","k":50}]},{"c":"801194","n":"保险Ⅱ","l3":[{"c":"851941","n":"保险Ⅲ","k":5}]}]},{"c":"801880","n":"汽车","l2":[{"c":"801092","n":"汽车服务","l3":[{"c":"850232","n":"汽车经销商","k":4},{"c":"850233","n":"汽车综合服务","k":5}]},{"c":"801093","n":"汽车零部件","l3":[{"c":"850922","n":"车身附件及饰件","k":36},{"c":"850923","n":"底盘与发动机系统","k":93},{"c":"850924","n":"轮胎轮毂","k":21},{"c":"850925","n":"其他汽车零部件","k":55},{"c":"850926","n":"汽车电子电气系统","k":39}]},{"c":"801095","n":"乘用车","l3":[{"c":"850951","n":"电动乘用车","k":3},{"c":"850952","n":"综合乘用车","k":5}]},{"c":"801096","n":"商用车","l3":[{"c":"850912","n":"商用载货车","k":8},{"c":"850913","n":"商用载客车","k":5}]},{"c":"801881","n":"摩托车及其他","l3":[{"c":"858811","n":"其他运输设备","k":8},{"c":"858812","n":"摩托车","k":8}]}]},{"c":"801890","n":"机械设备","l2":[{"c":"801072","n":"通用设备","l3":[{"c":"850711","n":"机床工具","k":18},{"c":"850713","n":"磨具磨料","k":12},{"c":"850715","n":"制冷空调设备","k":18},{"c":"850716","n":"其他通用设备","k":46},{"c":"850731","n":"仪器仪表","k":55},{"c":"850751","n":"金属制品","k":71}]},{"c":"801074","n":"专用设备","l3":[{"c":"850721","n":"纺织服装设备","k":12},{"c":"850723","n":"农用机械","k":8},{"c":"850725","n":"能源及重型设备","k":57},{"c":"850726","n":"印刷包装机械","k":10},{"c":"850727","n":"其他专用设备","k":80},{"c":"850728","n":"楼宇设备","k":14}]},{"c":"801076","n":"轨交设备Ⅱ","l3":[{"c":"850936","n":"轨交设备Ⅲ","k":30}]},{"c":"801077","n":"工程机械","l3":[{"c":"850771","n":"工程机械整机","k":19},{"c":"850772","n":"工程机械器件","k":9}]},{"c":"801078","n":"自动化设备","l3":[{"c":"850781","n":"机器人","k":18},{"c":"850782","n":"工控设备","k":27},{"c":"850783","n":"激光设备","k":12},{"c":"850784","n":"其他自动化设备","k":25}]}]},{"c":"801950","n":"煤炭","l2":[{"c":"801951","n":"煤炭开采","l3":[{"c":"859511","n":"动力煤","k":15},{"c":"859512","n":"焦煤","k":11}]},{"c":"801952","n":"焦炭Ⅱ","l3":[{"c":"859521","n":"焦炭Ⅲ","k":7}]}]},{"c":"801960","n":"石油石化","l2":[{"c":"801961","n":"油气开采Ⅱ","l3":[{"c":"859611","n":"油气开采Ⅲ","k":4}]},{"c":"801962","n":"油服工程","l3":[{"c":"859621","n":"油田服务","k":7},{"c":"859622","n":"油气及炼化工程","k":6}]},{"c":"801963","n":"炼化及贸易","l3":[{"c":"859631","n":"炼油化工","k":10},{"c":"859632","n":"油品石化贸易","k":6},{"c":"859633","n":"其他石化","k":14}]}]},{"c":"801970","n":"环保","l2":[{"c":"801971","n":"环境治理","l3":[{"c":"859711","n":"大气治理","k":5},{"c":"859712","n":"水务及水治理","k":50},{"c":"859713","n":"固废治理","k":34},{"c":"859714","n":"综合环境治理","k":15}]},{"c":"801972","n":"环保设备Ⅱ","l3":[{"c":"859721","n":"环保设备Ⅲ","k":26}]}]},{"c":"801980","n":"美容护理","l2":[{"c":"801981","n":"个护用品","l3":[{"c":"859811","n":"生活用纸","k":8},{"c":"859812","n":"洗护用品","k":4}]},{"c":"801982","n":"化妆品","l3":[{"c":"859821","n":"化妆品制造及其他","k":5},{"c":"859822","n":"品牌化妆品","k":8}]},{"c":"801983","n":"医疗美容","l3":[{"c":"859831","n":"医美耗材","k":2},{"c":"859832","n":"医美服务","k":1}]}]}];
+/* ═══════════ 数据源：全部来自后端 API ═══════════
+   旧实现依赖内嵌 const TREE / data/stocks.json，
+   与后端分类（134/346）不一致。现改为运行时从 API 构建。
 
-/* 股票明细按需加载（data/stocks.json） */
-let STOCKS = null;          // { 三级代码: ["code|name|ex", ...] }
-let ALL_STOCKS = [];        // 扁平索引
-let ALL_L2 = [];
+   转义（esc）、API 封装（api/apiGet）、金额与色板阈值（yi/cls/fmtAmt）
+   统一由 common.js 提供 —— 审查报告 §9.3-1：让三个页面用同一个实现，
+   而不是各自复制一份。 */
 
-function buildIndex(){
-  ALL_L2 = [];
-  TREE.forEach(l1 => l1.l2.forEach(l2 => {
-    ALL_L2.push({code:l2.c, name:l2.n, l1:l1.n, l1c:l1.c});
-    l2.l3.forEach(l3 => {
-      (STOCKS[l3.c] || []).forEach(str => {
-        const [code, name, ex] = str.split('|');
-        ALL_STOCKS.push({code, name, ex, l3:l3.n, l3c:l3.c, l2:l2.n, l2c:l2.c, l1:l1.n, l1c:l1.c});
+let TREE = [];              // 一/二/三级骨架（由 /industries/tree 构建）
+let STOCKS = null;          // { 三级代码: [{code,name,ex,tsCode}] }，按需加载
+let TREE_READY = false;
+
+/* 树索引：code → 节点（审查报告 6.3）
+   原实现里 findL3 / findL2Of 各自对约 480 个节点做线性扫描，而 countL3
+   内又同时调用两者，单次渲染约 33 万次访问。改为在 loadTree() 里建索引，
+   查找降为 O(1)。 */
+let _l3Index = new Map();   // l3code → l3 节点
+let _l2IndexOf = new Map(); // l3code → 所属 l2code
+let _l2Index = new Map();   // l2code → l2 节点
+
+function _buildTreeIndex(){
+  _l3Index.clear(); _l2IndexOf.clear(); _l2Index.clear();
+  TREE.forEach(function(l1){
+    (l1.l2 || []).forEach(function(l2){
+      _l2Index.set(l2.c, l2);
+      (l2.l3 || []).forEach(function(l3){
+        _l3Index.set(l3.c, l3);
+        _l2IndexOf.set(l3.c, l2.c);
       });
     });
-  }));
+  });
 }
 
-/* 懒加载：首次需要股票数据时拉取 */
-let _loading = null;
-function ensureStocks(){
-  if(STOCKS) return Promise.resolve();
-  if(_loading) return _loading;
-  _loading = fetch('data/stocks.json')
-    .then(r => { if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(j => { STOCKS = j; buildIndex(); })
-    .catch(e => { _loading = null; throw e; });
-  return _loading;
-}
+/* 三级 → 成分股：按需从 /industries/{code}/members 拉取并缓存。
+   缓存值统一为 {ok:true, list:[...]} 或 {ok:false} —— 失败**不写入空数组**，
+   否则 countL3 得 0 会让那些三级行业节点直接从树上消失（审查报告 6.1 P1）。 */
+const _memberCache = new Map();
 
-const TOTAL = {
-  l1: TREE.length,
-  l2: TREE.reduce((s,a)=>s+a.l2.length,0),
-  l3: TREE.reduce((s,a)=>s+a.l2.reduce((t,b)=>t+b.l3.length,0),0),
-  st: TREE.reduce((s,a)=>s+a.l2.reduce((t,b)=>t+b.l3.reduce((u,c)=>u+(c.k||0),0),0),0)
-};
-
-/* ═══════════ 模拟资金流 ═══════════ */
-function seedOf(str){let h=2166136261;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
-function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
-
-/* 生成个股近 N 个交易日的资金流序列（确定性） */
-const _seriesCache = new Map();
-function genSeries(code, name, days){
-  const _ck = code + '|' + days;
-  const _hit = _seriesCache.get(_ck);
-  if(_hit) return _hit;
-  const r = mulberry(seedOf(code + name));
-  const big = /^(贵州茅台|宁德时代|中国平安|招商银行|五粮液|比亚迪|隆基绿能|美的集团|长江电力|紫金矿业|中国石油|工商银行|农业银行|中国银行|中远海控|京沪高铁|恒瑞医药|海康威视|立讯精密|万华化学|东方财富)/.test(name);
-  /* 单日净流入量级：大盘股约 0-8 亿，中小盘约 0-1.2 亿 */
-  const base = big ? (r()*1.6 + 0.5) : (r()*0.32 + 0.06);
-  const vol  = big ? 1.5 : (r()*1.1 + 0.5);          // 波动率
-  const drift = (r()-0.46) * 0.10;                   // 趋势
-  const out = [];
-  let cum = 0;
-  const start = new Date();
-  let i = 0, guard = 0;
-  while(out.length < days && guard < days*3){
-    guard++;
-    const d = new Date(start);
-    d.setDate(d.getDate() - (i++));
-    const wd = d.getDay();
-    if(wd===0 || wd===6) continue;                   // 跳过周末
-    const g = (r()+r()+r()+r()-2)/1.4;               // 近正态
-    const v = (g*vol + drift) * base;
-    cum += v;
-    out.push({d: d.toISOString().slice(0,10), v, cum});
+async function _fetchMembers(path, cacheKey){
+  const hit = _memberCache.get(cacheKey);
+  if(hit) return hit;                       // 命中（含失败标记）直接返回
+  const list = [];
+  let ok = true;
+  try{
+    // page_size 上限 100，循环拉全
+    let page = 1, total = Infinity;
+    while(list.length < total && page <= 20){
+      const d = await apiGet(path + '&page=' + page + '&page_size=100');
+      total = d.total || 0;
+      (d.list || []).forEach(x => list.push({
+        code: (x.tsCode || '').split('.')[0],
+        tsCode: x.tsCode,
+        name: x.name,
+        ex: (x.tsCode || '').endsWith('.SH') ? '1' : '0'
+      }));
+      if(!d.list || d.list.length < 100) break;
+      page++;
+    }
+  }catch(e){
+    /* 失败：写入「失败标记」并保留错误信息，**不缓存空数组**。
+       这样下一次渲染会重试，且 UI 能区分「加载失败」与「确实为空」。 */
+    ok = false;
+    _memberCache.set(cacheKey, {ok:false, list:[], err:(e && e.message) || '请求失败'});
+    return _memberCache.get(cacheKey);
   }
-  const _res = out.reverse();
-  _seriesCache.set(_ck, _res);
-  return _res;
+  const rec = {ok:true, list:list};
+  _memberCache.set(cacheKey, rec);
+  return rec;
 }
 
-/* ═══════════ 工具 ═══════════ */
-const yi = v => (v>=0?'+':'') + v.toFixed(2) + '亿';
-const fmtAmt = v => (v>=0?'+':'') + v.toFixed(1);
-const cls = v => v>0.005?'up':(v<-0.005?'down':'flat');
+/* 三级行业成分股（只看缓存，不触发加载） */
+function _cachedMembers(l3code){
+  const r = _memberCache.get(l3code);
+  return (r && r.ok) ? r.list : null;
+}
+
+async function loadMembers(l3code){
+  const key = 'l3|' + l3code;
+  const r = await _fetchMembers('/api/v1/industries/' + encodeURIComponent(l3code) +
+                                '/members?x=1', key);
+  return r.ok ? r.list : null;              // null = 加载失败（与 [] 区分）
+}
+
+/* 二级行业的「未细分到三级」成分股（残差：挂 L2 自身、未被任何 L3 覆盖）。
+   必须用 ?direct=1 —— 直接调 loadMembers(l2code) 会拿到 L2 全量，
+   其中已归入三级子行业的部分会与 L3 节点重复渲染。 */
+async function loadGapMembers(l2code){
+  const key = 'gap|' + l2code;
+  const r = await _fetchMembers('/api/v1/industries/' + encodeURIComponent(l2code) +
+                                '/members?direct=1', key);
+  return r.ok ? r.list : null;
+}
+
+/* 构建行业树骨架 + 真实成分股计数 */
+async function loadTree(){
+  const raw = await apiGet('/api/v1/industries/tree');   // data 即一/二/三级数组
+  const arr = Array.isArray(raw) ? raw : (raw.list || []);
+
+  /* 成分股数量与「未细分到三级」残差数：/tree 已同时返回 memberCount 与
+     directMemberCount（审查报告 6.3 P1）。原实现为此额外发了 2 个
+     /industries?level=2|3&page_size=1000 全量列表请求（各带上文 5–6 条查询、
+     含 10 日窗口聚合），完全多余 —— 现已删除。 */
+  const norm = n => ({
+    c: n.swCode || n.sw_code,
+    n: n.name,
+    k: n.memberCount || 0
+  });
+
+  TREE = (arr || []).map(l1 => ({
+    c: l1.swCode || l1.sw_code,
+    n: l1.name,
+    k: l1.memberCount || 0,
+    l2: (l1.children || []).map(l2 => {
+      const c = l2.swCode || l2.sw_code;
+      return {
+        c: c,
+        n: l2.name,
+        k: l2.memberCount || 0,
+        /* 直属成分股数：挂在 L2 自身、未被任何 L3 子行业覆盖的股票数。
+           由后端 /tree 的 directMemberCount 提供。 */
+        direct: l2.directMemberCount || 0,
+        l3: (l2.children || []).map(norm)
+      };
+    })
+  }));
+
+  _buildTreeIndex();
+  STOCKS = {};               // 改为按需填充
+  TREE_READY = true;
+  return TREE;
+}
+
+/* 按股票代码解析所属行业层级。
+   成分股缓存里命中最好；否则从已加载的树里做兜底匹配。 */
+function stockIndustry(code, tsCode){
+  const want = String(code || '').replace(/\.(SH|SZ|BJ)$/, '');
+  const full = tsCode || (want.startsWith('6') ? want + '.SH' : want + '.SZ');
+
+  /* 1) 三级成分股缓存里精确查（最快） */
+  for (const [key, rec] of _memberCache){
+    if(key.indexOf('gap|') === 0 || !rec.ok) continue;   // 残差缓存另走第 2 步
+    const hit = rec.list.find(function(x){
+      return x.code === want || x.tsCode === full;
+    });
+    if (hit) return byL3(key.slice(3), hit);
+  }
+
+  /* 2) 「未细分到三级」残差缓存：只补一级/二级，三级留空 */
+  for (const [key, rec] of _memberCache){
+    if(key.indexOf('gap|') !== 0 || !rec.ok) continue;
+    const hit = rec.list.find(function(x){
+      return x.code === want || x.tsCode === full;
+    });
+    if (hit){
+      const l2c = key.slice(4);
+      const l2 = _l2Index.get(l2c);
+      if (l2){
+        const l1 = TREE.find(function(a){ return (a.l2 || []).indexOf(l2) >= 0; });
+        return Object.assign({}, hit, {
+          l1: l1 ? l1.n : '', l1c: l1 ? l1.c : '',
+          l2: l2.n, l2c: l2.c,
+          l3: '', l3c: ''            // 该股票确实没有三级归属
+        });
+      }
+    }
+  }
+
+  /* 3) 兜底：只给代码与名称，行业留空（不阻塞抽屉打开） */
+  return { code: want, tsCode: full, name: '', ex: full.endsWith('.SH') ? '1' : '0',
+           l1: '', l1c: '', l2: '', l2c: '', l3: '', l3c: '' };
+}
+
+/* 由三级行业码 + 成分股，补齐一/二/三级名称 */
+function byL3(l3code, member){
+  const l2c = _l2IndexOf.get(l3code);
+  const l3 = _l3Index.get(l3code);
+  const l2 = l2c ? _l2Index.get(l2c) : null;
+  const l1 = l2 ? TREE.find(function(a){ return (a.l2 || []).indexOf(l2) >= 0; }) : null;
+  if (!l3 || !l2){
+    return Object.assign({}, member, {l1:'', l1c:'', l2:'', l2c:'', l3:'', l3c:''});
+  }
+  return Object.assign({}, member, {
+    l1: l1 ? l1.n : '', l1c: l1 ? l1.c : '',
+    l2: l2.n, l2c: l2.c,
+    l3: l3.n, l3c: l3.c
+  });
+}
+
+/* 统计数字：由加载后的 TREE 推导 */
+function treeTotal(){
+  let l2 = 0, l3 = 0, st = 0;
+  TREE.forEach(a => {
+    l2 += (a.l2 || []).length;
+    (a.l2 || []).forEach(b => {
+      l3 += (b.l3 || []).length;
+      (b.l3 || []).forEach(x => { st += (x.k || 0); });
+    });
+  });
+  return { l1: TREE.length, l2, l3, st };
+}
+
+/* 兼容旧调用：确保树已加载 */
+async function ensureStocks(){
+  if(TREE_READY) return;
+  await loadTree();
+}
+
+/* TOTAL 改为函数：TREE 由 API 异步加载，模块级常量会在加载前求值为空 */
+function TOTAL(){
+  return treeTotal();
+}
+
+/* ═══════════ 工具 ═══════════
+   esc / escAttr / yi / fmtAmt / cls 由 common.js 提供（审查报告 8.12）。
+   原文件在此处还内嵌了 seedOf / mulberry 两个 mock 数据生成器 ——
+   它们已无任何调用点（实时取数后从不走 catch→mock 分支），
+   但持续被发布在页面上，且与 docs/01「前端不使用任何模拟数据」的声明矛盾
+   （审查报告 6.1 P1）。已删除。 */
 const exName = e => e==='1'?'上交所':'深交所';
-const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function hl(text, q){
+  text = String(text==null?'':text);
   if(!q) return esc(text);
   const i = text.toLowerCase().indexOf(q.toLowerCase());
   if(i<0) return esc(text);
@@ -596,135 +761,468 @@ function hl(text, q){
 /* ═══════════ 树渲染 ═══════════ */
 let exFilter = 'all', term = '';
 
-/* 搜索匹配：
-   - 命中行业名（一/二/三级）→ 该行业下所有股票全部命中
-   - 命中股票名或代码 → 仅命中该股票
-   返回 { codes:Set, indL1:Set, indL2:Set, indL3:Set } */
+/* ═══════════ 搜索与筛选 ═══════════
+   行业名 / 代码 → 本地树匹配（命中该行业即选中其全部成分）
+   股票名 / 代码 → 后端 /stocks/search（前端不再持有全量成分股）
+   交易所筛选    → 由各三级行业按需加载后精确过滤                */
+
+let _searchToken = 0;                 // 防止异步竞态
+let _lastHits = null;                 // 缓存最近一次搜索结果
+let _searchError = null;              // 最近一次搜索失败原因（展示给用户，不再空吞）
+
+/* 同步版：仅行业维度匹配，供渲染时即时使用 */
 function matchCount(){
   if(!term && exFilter==='all') return null;
-  const q = term.toLowerCase().trim();
-  const codes = new Set(), indL1 = new Set(), indL2 = new Set(), indL3 = new Set();
-  if(!q) {
-    ALL_STOCKS.forEach(s => { if(exFilter==='all' || s.ex===exFilter) codes.add(s.code); });
-    return {codes, indL1, indL2, indL3, pureIndustry:false};
-  }
 
-  TREE.forEach(l1 => {
-    const l1Hit = l1.n.toLowerCase().includes(q) || l1.c.includes(q);
-    if(l1Hit) indL1.add(l1.c);
-    l1.l2.forEach(l2 => {
-      const l2Hit = l2.n.toLowerCase().includes(q) || l2.c.includes(q);
-      if(l2Hit) indL2.add(l2.c);
-      l2.l3.forEach(l3 => {
-        const l3Hit = l3.n.toLowerCase().includes(q) || l3.c.includes(q);
-        if(l3Hit) indL3.add(l3.c);
-        (STOCKS[l3.c] || []).forEach(str => {
-          const [code, name, ex] = str.split('|');
-          if(exFilter!=='all' && ex!==exFilter) return;
-          if(l1Hit || l2Hit || l3Hit || name.toLowerCase().includes(q) || code.includes(q)) {
-            codes.add(code);
-          }
+  const q = term.toLowerCase().trim();
+  const indL1 = new Set(), indL2 = new Set(), indL3 = new Set();
+  const codes = new Set();
+
+  if(q){
+    TREE.forEach(function(l1){
+      const h1 = l1.n.toLowerCase().includes(q) || String(l1.c).includes(q);
+      if(h1) indL1.add(l1.c);
+      (l1.l2 || []).forEach(function(l2){
+        const h2 = l2.n.toLowerCase().includes(q) || String(l2.c).includes(q);
+        if(h2) indL2.add(l2.c);
+        (l2.l3 || []).forEach(function(l3){
+          const h3 = l3.n.toLowerCase().includes(q) || String(l3.c).includes(q);
+          if(h3) indL3.add(l3.c);
         });
       });
     });
-  });
-  return {codes, indL1, indL2, indL3, pureIndustry:false};
+  }
+
+  /* 合并后端搜索到的股票与其所属二级行业 */
+  let l2hit = null, l2gap = null, gapCodes = null;
+  if(_lastHits && _lastHits.q === q){
+    _lastHits.codes.forEach(function(x){ codes.add(x); });
+    l2hit    = _lastHits.l2hit    || null;
+    /* 无三级归属的命中：所属二级码集合 + 股票代码集合，供虚拟节点渲染 */
+    l2gap    = _lastHits.l2gap    || null;
+    gapCodes = _lastHits.gapCodes || null;
+  }
+
+  return {codes: codes, indL1: indL1, indL2: indL2, indL3: indL3,
+          l2hit: l2hit, l2gap: l2gap, gapCodes: gapCodes,
+          total: _lastHits ? _lastHits.total : null,
+          shown: _lastHits ? _lastHits.shown : null,
+          truncated: _lastHits ? !!_lastHits.truncated : false,
+          error: _searchError};
+}
+
+/* 异步版：触发一次后端股票搜索，完成后重渲染 */
+async function searchStocks(q){
+  const my = ++_searchToken;
+  q = (q || '').trim();
+  if(!q){
+    _lastHits = null;
+    renderTree();
+    return;
+  }
+  try{
+    /* page_size 上限 100（后端 main.py 校验）。命中总数由响应的 total 单独返回，
+       不受此上限截断 —— 原实现把这个 total 丢掉了，于是宽泛查询
+       （例如只输一个「银」字）永远只显示 100 只且不提示（审查报告 6.1 P0）。 */
+    const d = await apiGet('/api/v1/stocks/search?q=' + encodeURIComponent(q) + '&page=1&page_size=100');
+    if(my !== _searchToken) return;
+
+    const codes    = new Set();
+    const l2hit    = new Set();      // 命中股票所属的二级行业
+    const l2gap    = new Set();      // 命中中「无三级归属」股票所属的二级行业
+    const gapCodes = new Set();      // 命中中「无三级归属」的股票代码
+    (d.list || []).forEach(function(x){
+      const c = String(x.tsCode || '').split('.')[0];
+      if(c) codes.add(c);
+      if(x.industryCode) l2hit.add(String(x.industryCode));
+      /* hasL3 === false → 该股票没有三级归属，只能渲染到所属 L2 的
+         「未细分到三级」虚拟分组里。注意 hasL3 可能为 undefined（旧后端），
+         此时不视作 gap，走原有 L3 路径，保证向后兼容。 */
+      if(x.hasL3 === false && x.industryCode){
+        l2gap.add(String(x.industryCode));
+        if(c) gapCodes.add(c);
+      }
+    });
+    _lastHits = { q: q.toLowerCase(), codes: codes, l2hit: l2hit,
+                  l2gap: l2gap, gapCodes: gapCodes,
+                  /* total = 真实命中总数；shown = 本页实际返回条数 */
+                  total: (typeof d.total === 'number') ? d.total : (d.list || []).length,
+                  shown: (d.list || []).length,
+                  truncated: (typeof d.total === 'number') && d.total > (d.list || []).length };
+  }catch(err){
+    if(my !== _searchToken) return;
+    _lastHits = null;
+    _searchError = err.message || String(err);
+  }
+  if(my === _searchToken) _searchError = _lastHits ? null : _searchError;
+  renderTree();
 }
 
 /* ═══════════ 树渲染（骨架 + 懒加载股票）═══════════
    首屏只渲染行业骨架（31/131/336 个节点），
    股票列表在三级节点展开时才注入 DOM —— 控制首屏节点数 */
-function stocksOfL3(l3c, q, hits){
-  let list = (STOCKS[l3c] || []).map(str => {
-    const [code, name, ex] = str.split('|');
-    return {code, name, ex};
-  });
-  if(exFilter!=='all') list = list.filter(s => s.ex===exFilter);
-  if(hits) list = list.filter(s => hits.codes.has(s.code));
+/* 取某三级行业的成分股（异步，带缓存）。
+   返回 null 表示加载失败（与「空数组＝确实没有成分股」区分）。 */
+async function stocksOfL3(l3c, q, hits){
+  let list = await loadMembers(l3c);          // [{code,name,ex,tsCode}] 或 null
+  if(list === null) return null;
+
+  if(exFilter !== 'all') list = list.filter(function(s){ return s.ex === exFilter; });
+
+  if(hits && !industryMatched(l3c, hits)){
+    list = list.filter(function(s){ return hits.codes.has(s.code); });
+  }
+  /* 行业名命中时不过滤，展示该行业全部成分股 */
   return list;
 }
 
-function countL3(l3c, hits){
-  const arr = STOCKS[l3c] || [];
-  if(hits) return arr.filter(x=>hits.codes.has(x.split('|')[0])).length;
-  if(exFilter!=='all') return arr.filter(x=>x.split('|')[2]===exFilter).length;
-  return arr.length;
+/* 该三级行业（或其上级）是否被行业名直接命中 */
+function industryMatched(l3code, hits){
+  if(!hits) return true;
+  if(hits.indL3 && hits.indL3.has(l3code)) return true;
+  const l2code = findL2Of(l3code);
+  if(l2code && hits.indL2 && hits.indL2.has(l2code)) return true;
+  if(hits.indL1 && hits.indL1.size) return true;
+  /* 后端搜索命中了属于该二级行业的股票 */
+  if(l2code && hits.l2hit && hits.l2hit.has(l2code)) return true;
+  return false;
 }
 
-/* 把股票列表填入已展开的三级节点（幂等） */
-function fillStocks(l3node){
+/* 成分股计数：优先用 tree 里的 k（来自 /tree 的 memberCount） */
+/* 在 hits 条件下，判断某三级行业应显示的股票数。
+
+   ⚠ 关键区分（2026-10-06 实测发现）：`hits` 非空有两种来源 ——
+     (a) 关键词搜索：hits.codes / indL1/2/3 里**有**内容 → 需要按命中收窄；
+     (b) 仅交易所筛选：term 为空、exFilter != 'all'，此时 hits 的各集合**全为空**，
+         收窄完全由下方 exCount() 里的按 ex 过滤完成。
+   若把 (b) 也当成「有搜索条件」，第 3 步（未缓存时只有 l2hit 才展示）会把
+   所有节点判成 0 → 整个树被清空，界面显示「无匹配」（原实现靠 autoOpen='1'
+   强制展开并填充缓存来掩盖这个问题）。这里显式识别 (b)。 */
+function isPureExFilter(hits){
+  return !!hits && !(hits.codes && hits.codes.size) &&
+         !(hits.indL1 && hits.indL1.size) &&
+         !(hits.indL2 && hits.indL2.size) &&
+         !(hits.indL3 && hits.indL3.size) &&
+         !(hits.l2hit && hits.l2hit.size) &&
+         !(hits.l2gap && hits.l2gap.size);
+}
+
+function countL3(l3c, hits){
+  const node = _l3Index.get(l3c);              // O(1)，原实现是线性扫描
+  const base = node ? (node.k || 0) : 0;
+  const cached = _cachedMembers(l3c);          // 仅成功缓存；失败返回 null
+  const exOn = exFilter !== 'all';
+
+  /* 交易所筛选下该行业的可见股票数 */
+  const exCount = function(){
+    if(!exOn) return base;
+    if(cached) return cached.filter(function(x){ return x.ex === exFilter; }).length;
+    return base;                       /* 未缓存：保守回退，不隐藏行业 */
+  };
+
+  if(!hits) return exCount();
+  /* (b) 仅交易所筛选：不做命中收窄，展示全部（再按 ex 过滤） */
+  if(isPureExFilter(hits)) return exCount();
+
+  const l2code = _l2IndexOf.get(l3c) || null;
+
+  /* 1) 行业名命中（本行业 / 上级行业）→ 展示该行业成分股 */
+  if((hits.indL3 && hits.indL3.has(l3c)) ||
+     (l2code && hits.indL2 && hits.indL2.has(l2code)) ||
+     (hits.indL1 && hits.indL1.size)){
+    return exCount();
+  }
+
+  /* 2) 已缓存成分股 → 最精确：按命中代码 + 交易所过滤 */
+  if(cached){
+    return cached.filter(function(x){
+      return hits.codes.has(x.code) && (!exOn || x.ex === exFilter);
+    }).length;
+  }
+
+  /* 3) 未缓存：无法判断该行业是否含命中股票。
+        此时只有"后端已明确命中该二级行业"才展示，避免全树放行。 */
+  if(l2code && hits.l2hit && hits.l2hit.has(l2code)) return hits.codes.size;
+
+  return 0;
+}
+
+/* 二级行业「未细分到三级」分组的可见计数。
+   非搜索态：取后端 directMemberCount，再按交易所筛选收紧。
+   搜索态  ：取该 L2 下 hasL3=false 的命中数；
+             若命中页被 page_size 截断（无法精确计数），返回 null 表示
+             「仅放行、不显示具体数字」，由调用方决定展示方式。 */
+function gapCount(l2, hits){
+  const cached = _memberCache.get('gap|' + l2.c);
+  const cachedList = (cached && cached.ok) ? cached.list : null;
+  const exOn = exFilter !== 'all';
+
+  const exCount = function(n){
+    if(!exOn) return n;
+    if(cachedList) return cachedList.filter(function(x){ return x.ex === exFilter; }).length;
+    return n;
+  };
+
+  if(!hits) return exCount(l2.direct || 0);
+  /* 仅交易所筛选：不做命中收窄（与 countL3 口径一致） */
+  if(isPureExFilter(hits)) return exCount(l2.direct || 0);
+
+  /* 行业名命中（本行业或上级）→ 展示该 L2 全部残差 */
+  if((hits.indL2 && hits.indL2.has(l2.c)) ||
+     (hits.indL1 && hits.indL1.size) ||
+     (hits.indL3 && hits.indL3.size)){
+    return exCount(l2.direct || 0);
+  }
+
+  /* 股票名/代码命中且为无三级归属 → 精确计数 */
+  if(hits.gapCodes){
+    const n = hits.gapCodes.size;
+    if(n) return exCount(n);
+  }
+
+  /* 该 L2 有 gap 命中，但具体数量受搜索分页限制 → 未知 */
+  if(hits.l2gap && hits.l2gap.has(l2.c)) return null;
+
+  return 0;
+}
+
+/* 该二级行业是否应渲染「未细分到三级」分组 */
+function hasGap(l2, hits){
+  if(!hits) return (l2.direct || 0) > 0;
+  /* 仅交易所筛选：与无搜索态等价 */
+  if(isPureExFilter(hits)) return (l2.direct || 0) > 0;
+  if(!l2 || !l2.c) return false;
+  if(hits.l2gap && hits.l2gap.has(l2.c)) return true;
+  /* 行业名命中且该 L2 确实有残差 */
+  if((hits.indL2 && hits.indL2.has(l2.c)) ||
+     (hits.indL1 && hits.indL1.size) ||
+     (hits.indL3 && hits.indL3.size)){
+    return (l2.direct || 0) > 0;
+  }
+  return false;
+}
+
+/* 给定三级行业码，返回其所属二级行业码。
+   原实现是三层嵌套线性扫描（findL2Of / findL3），而 countL3 每次渲染都会调用，
+   在 511 个节点上约 33 万次访问（审查报告 6.3 P0）。
+   现改为 loadTree() 建立的 _l2IndexOf / _l3Index 索引，O(1)。 */
+function findL2Of(l3code){ return _l2IndexOf.get(l3code) || null; }
+function findL3(code){ return _l3Index.get(code) || null; }
+
+/* 把股票列表填入已展开的三级节点（幂等，异步） */
+async function fillStocks(l3node){
   if(l3node.dataset.filled === '1') return;
+  l3node.dataset.filled = '1';               // 先占位，防并发重入
+
   const code = l3node.dataset.code;
+  const isGap = l3node.dataset.gap === '1';
   const q = term.trim();
   const hits = matchCount();
-  const list = stocksOfL3(code, q, hits);
   const body = l3node.querySelector('.l3-body');
   if(!body) return;
+
+  body.innerHTML = '<div class="stub-empty">加载中…</div>';
+
+  let list = null;                 // null = 加载失败（与「确实为空」区分）
+  try{
+    if(isGap){
+      /* 虚拟节点：只取残差（?direct=1），不能走 L3 路径 */
+      list = await loadGapMembers(code);
+      if(list && exFilter !== 'all') list = list.filter(function(s){ return s.ex === exFilter; });
+      /* 搜索态：只保留本次命中的无三级归属股票 */
+      if(list && hits && hits.gapCodes && hits.gapCodes.size){
+        list = list.filter(function(s){ return hits.gapCodes.has(s.code); });
+      }
+    }else{
+      list = await stocksOfL3(code, q, hits);
+    }
+  }catch(e){
+    body.innerHTML = '<div class="stub-empty">成分股加载失败：' + esc(e.message) + '</div>';
+    l3node.dataset.filled = '0';
+    return;
+  }
+
+  /* 加载失败：明确告知并允许重试，不再静默渲染成「本行业无成分股」 */
+  if(list === null){
+    l3node.dataset.filled = '0';       // 允许再次展开时重试
+    body.innerHTML = '<div class="stub-empty">成分股加载失败，请重试' +
+      '<button class="retry" data-retry="1">重试</button></div>';
+    return;
+  }
+
   body.innerHTML = list.length
     ? '<div class="stocks">' + list.map(s =>
-        `<button class="stock" data-code="${s.code}" data-name="${esc(s.name)}">
-          <span class="stock-code">${s.code}</span>
+        `<button class="stock" data-code="${escAttr(s.code)}" data-name="${escAttr(s.name)}">
+          <span class="stock-code">${esc(s.code)}</span>
           <span class="stock-name">${q?hl(s.name,q):esc(s.name)}</span>
           <span class="ex">${s.ex==='1'?'SH':'SZ'}</span>
         </button>`).join('') + '</div>'
     : '<div class="stub-empty">' + ((term || exFilter!=='all') ? '该筛选条件下无股票' : '本行业无当前成分股') + '</div>';
-  l3node.dataset.filled = '1';
 }
 
-/* 递归填充当前所有已展开的三级节点 */
+/* 递归填充当前所有已展开的三级节点 —— **带并发上限**。
+
+   审查报告 6.3 P0 指出「一次搜索会触发请求风暴」。除了把默认展开从
+   「全部节点」收窄为「仅命中节点」之外，这里再加一道并发闸门：
+   宽泛查询（例如只输一个「0」，命中 300+ 个行业）仍会有大量节点同时展开，
+   若不限流，浏览器会瞬间打出几百个并发请求，既打爆后端也拖慢渲染。
+
+   实现：一个简单的信号量（最多 FILL_CONC 个在途），其余排队。
+   队列用「同一批」概念 —— 每次 renderTree 产生一批，批内并发受限，
+   批与批之间不阻塞（新的一批会取代旧的排队项，避免堆积）。 */
+const FILL_CONC = 6;
+let _fillRunning = 0;
+let _fillQueue = [];
+
+function _fillPump(){
+  while(_fillRunning < FILL_CONC && _fillQueue.length){
+    const node = _fillQueue.shift();
+    if(!node || !node.isConnected) continue;      // 已被重建掉的节点直接丢弃
+    _fillRunning++;
+    Promise.resolve(fillStocks(node)).catch(function(){}).then(function(){
+      _fillRunning--;
+      _fillPump();
+    });
+  }
+}
+
 function fillOpenL3(){
-  document.querySelectorAll('.l3[data-open="1"]').forEach(fillStocks);
+  /* 新一轮渲染：丢弃上一轮尚未开始的排队项（它们属于已失效的 DOM） */
+  _fillQueue = [];
+  const nodes = Array.prototype.slice.call(
+    document.querySelectorAll('.l3[data-open="1"]'));
+  _fillQueue = _fillQueue.concat(nodes);
+  _fillPump();
 }
 
 function renderTree(){
   const box = document.getElementById('tree');
   const q = term.trim();
   const hits = matchCount();
-  const autoOpen = (q || hits) ? '1' : '0';
+
+  /* ⚠ 搜索风暴修复（审查报告 6.3 P0）
+     原实现把 autoOpen 全局定为 (q || hits) ? '1' : '0'，于是**每一个**三级节点
+     的 data-open 都被置为 1，随后 fillOpenL3() 为每个节点各发一次 /members 请求
+     —— 一次宽泛查询 = 几十到上百个并发请求，彻底击穿懒加载设计。
+     现在改为「按节点判定」：只有真正命中（且计数 > 0）的三级 / 残差节点才默认展开。
+     ⚠ 两个边界（2026-10-06 用无头 Edge 实测后修正）：
+       · 空闲态（无关键词、无筛选）必须**全部收起**，否则首屏会对 ~300 个三级节点
+         同时发 /members（实测一次加载 300+ 请求）。原版的 autoOpen='0' 正是这个意图，
+         不能被写成 !searchOn → '1'。
+       · 有筛选但无关键词（如只点「上交所」）时同样不能全展开。 */
+  const searchOn = !!q;
+  /* 仅交易所筛选时，树不应被收窄成 0 —— 它与「无搜索」在展示上等价 */
+  const narrowing = searchOn && !isPureExFilter(hits);
+
+  /* 该三级节点是否被命中 —— 与 countL3 的判定口径保持一致 */
+  function l3Hit(l3c){
+    if(!hits) return false;
+    if(hits.indL3 && hits.indL3.has(l3c)) return true;
+    const l2c = _l2IndexOf.get(l3c);
+    if(l2c && hits.indL2 && hits.indL2.has(l2c)) return true;
+    if(hits.indL1 && hits.indL1.size) return true;
+    const cached = _cachedMembers(l3c);
+    if(cached) return cached.some(function(x){ return hits.codes.has(x.code); });
+    if(l2c && hits.l2hit && hits.l2hit.has(l2c)) return true;
+    return false;
+  }
+
+  /* 是否有「股票维度」的命中（决定要不要主动展开） */
+  const stockHit = narrowing && !!(hits && ((hits.codes && hits.codes.size) ||
+                                            (hits.l2gap && hits.l2gap.size)));
 
   const html = TREE.map(l1 => {
     const l2html = l1.l2.map(l2 => {
       const l3html = l2.l3.map(l3 => {
         const cnt = countL3(l3.c, hits);
         if(!cnt) return '';
-        return `<div class="l3" data-open="${autoOpen}" data-code="${l3.c}">
-          <button class="l3-head" data-toggle aria-expanded="${autoOpen==='1'}">
+        const open = (narrowing && l3Hit(l3.c)) ? '1' : '0';
+        return `<div class="l3" data-open="${open}" data-code="${l3.c}">
+          <button class="l3-head" data-toggle aria-expanded="${open==='1'}">
             <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
             <span class="l3-name">${q?hl(l3.n,q):esc(l3.n)}</span>
             <span class="tag-l3">三级</span>
-            <span class="flow-btn" data-flow="l3" data-code="${l3.c}" data-name="${esc(l3.n)}" title="查看行业资金流">资金流</span>
+            <span class="flow-btn" data-flow="l3" data-code="${escAttr(l3.c)}" data-name="${escAttr(l3.n)}" title="查看行业资金流">资金流</span>
             <span class="count">${cnt} 只</span>
           </button>
           <div class="l3-body"></div>
         </div>`;
       }).join('');
 
-      if(!l3html) return '';
-      const l2cnt = l2.l3.reduce((s,l3)=>s+countL3(l3.c, hits),0);
-      if(!l2cnt) return '';
+      /* 「未细分到三级」虚拟节点：该 L2 自身挂有未被任何 L3 覆盖的股票。
+         注意：
+           1) data-code 用真实 L2 code（fillStocks 直接读 dataset.code 发请求，
+              填占位码会 404；填真实 L2 code 也不会与任何真实 L3 撞车）。
+           2) data-gap="1" 是唯一的虚拟节点标识。
+           3) 不输出 flow-btn —— 这不是真实申万行业；填真实 L2 code 后
+              误点会静默返回 L2 全行业资金流，比 404 更危险。           */
+      const gapOn = hasGap(l2, hits);
+      const gapCnt = gapOn ? gapCount(l2, hits) : 0;
+      /* 残差节点同理：只有确实有命中时才默认展开 */
+      const gapOpen = (narrowing && hits && hits.l2gap && hits.l2gap.has(l2.c)) ? '1' : '0';
+      const gapHtml = gapOn
+        ? `<div class="l3 gap" data-open="${gapOpen}" data-gap="1" data-code="${escAttr(l2.c)}">
+            <button class="l3-head" data-toggle aria-expanded="${gapOpen==='1'}">
+              <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+              <span class="l3-name">未细分到三级</span>
+              <span class="tag-l3 tag-gap">其他</span>
+              <span class="count">${gapCnt == null ? '—' : gapCnt + ' 只'}</span>
+            </button>
+            <div class="l3-body"></div>
+          </div>`
+        : '';
 
-      return `<div class="l2" data-open="${autoOpen}">
-        <button class="l2-head" data-toggle aria-expanded="${autoOpen==='1'}">
+      /* 早退修正：必须同时考虑 L3 子节点与虚拟节点。
+         否则搜索无三级归属的股票时，该 L2 下所有 L3 计数均为 0，
+         整个二级行业会被丢弃，虚拟节点根本没有机会渲染。 */
+      if(!l3html && !gapHtml) return '';
+      const l2cnt = l2.l3.reduce((s,l3)=>s+countL3(l3.c, hits),0)
+                  + (gapOn && gapCnt != null ? gapCnt : 0);
+      if(!l2cnt && !gapOn) return '';
+
+      /* L2 默认展开：空闲态收起（懒加载）；搜索态只在「本 L2 或其 L3 有命中」时展开 */
+      const l2Open = (narrowing &&
+        (stockHit || (hits && ((hits.indL2 && hits.indL2.has(l2.c)) ||
+                  (hits.indL1 && hits.indL1.size) ||
+                  l2.l3.some(function(l3){ return l3Hit(l3.c); }))))) ? '1' : '0';
+
+      return `<div class="l2" data-open="${l2Open}">
+        <button class="l2-head" data-toggle aria-expanded="${l2Open==='1'}">
           <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
           <span class="l2-name">${q?hl(l2.n,q):esc(l2.n)}</span>
-          <span class="l2-code">${l2.c}</span>
-          <span class="flow-btn" data-flow="l2" data-code="${l2.c}" data-name="${esc(l2.n)}" title="查看行业资金流">资金流</span>
+          <span class="l2-code">${esc(l2.c)}</span>
+          <span class="flow-btn" data-flow="l2" data-code="${escAttr(l2.c)}" data-name="${escAttr(l2.n)}" title="查看行业资金流">资金流</span>
           <span class="count">${l2cnt} 只</span>
         </button>
-        <div class="l2-body">${l3html}</div>
+        <div class="l2-body">${l3html}${gapHtml}</div>
       </div>`;
     }).join('');
 
     if(!l2html) return '';
-    const cnt = hits ? hits.codes.size
-      : l1.l2.reduce((s,l2)=>s+l2.l3.reduce((t,l3)=>t+countL3(l3.c, null),0),0);
+    /* L1 计数同样并入各 L2 的残差 */
+    const cnt = l1.l2.reduce((s,l2)=>{
+      const g = hasGap(l2, hits);
+      const gc = g ? gapCount(l2, hits) : 0;
+      return s + l2.l3.reduce((t,l3)=>t+countL3(l3.c, hits),0)
+               + (g && gc != null ? gc : 0);
+    },0);
+    if(!cnt) return '';
 
-    return `<div class="l1" data-open="${autoOpen}">
-      <button class="l1-head" data-toggle aria-expanded="${autoOpen==='1'}">
+    /* L1 默认展开：空闲态收起（懒加载，避免首屏对全部三级节点发 /members）；
+       搜索态只在「本 L1 或其下任一 L2/L3 有命中」时展开。 */
+    const l1Open = (narrowing &&
+      (stockHit || (hits && ((hits.indL1 && hits.indL1.has(l1.c)) ||
+                l1.l2.some(function(l2){
+                  return (hits.indL2 && hits.indL2.has(l2.c)) ||
+                         l2.l3.some(function(l3){ return l3Hit(l3.c); });
+                }))))) ? '1' : '0';
+
+    return `<div class="l1" data-open="${l1Open}">
+      <button class="l1-head" data-toggle aria-expanded="${l1Open==='1'}">
         <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
         <span class="l1-name">${q?hl(l1.n,q):esc(l1.n)}</span>
-        <span class="l1-code">${l1.c}</span>
-        <span class="flow-btn" data-flow="l1" data-code="${l1.c}" data-name="${esc(l1.n)}" title="查看行业资金流">资金流</span>
+        <span class="l1-code">${esc(l1.c)}</span>
+        <span class="flow-btn" data-flow="l1" data-code="${escAttr(l1.c)}" data-name="${escAttr(l1.n)}" title="查看行业资金流">资金流</span>
         <span class="count">${cnt} 只</span>
       </button>
       <div class="l1-body">${l2html}</div>
@@ -732,9 +1230,42 @@ function renderTree(){
   }).join('');
 
   box.innerHTML = html || '<div class="empty">没有匹配的股票或行业</div>';
-  document.getElementById('statLine').innerHTML =
-    hits ? `匹配 <b>${hits.codes.size}</b> 只股票`
-         : `<b>${TOTAL.l1}</b> 一级 · <b>${TOTAL.l2}</b> 二级 · <b>${TOTAL.l3}</b> 三级 · <b>${TOTAL.st}</b> 只股票`;
+  (function(){
+    const el = document.getElementById('statLine');
+    if(!el) return;
+    if(hits){
+      const indN = (hits.indL1.size + hits.indL2.size + hits.indL3.size);
+      const stkN = hits.codes.size;
+      let txt = '';
+      if(indN) txt += '匹配 <b>' + indN + '</b> 个行业';
+      if(indN && stkN) txt += ' · ';
+      /* 命中总数用后端返回的 total（不受 page_size=100 截断）。
+         原实现把这个 total 丢掉了，宽泛查询永远只显示 100 只且不提示
+         （审查报告 6.1 P0）。 */
+      if(stkN){
+        const total = (typeof hits.total === 'number') ? hits.total : stkN;
+        txt += '<b>' + total + '</b> 只股票';
+        if(hits.truncated){
+          txt += '<span class="trunc-note">（共 ' + total + ' 只命中，'
+               + '本页显示前 ' + hits.shown + ' 只，可缩小关键词范围）</span>';
+        }
+      }
+      if(hits.error){
+        txt = '<span class="err-note">股票搜索失败：' + esc(hits.error) + '</span>'
+            + (txt ? ' · ' + txt : '');
+      }
+      el.innerHTML = txt || '无匹配';
+    } else if(isPureExFilter(hits)){
+      /* 仅交易所筛选：显示行业规模 + 当前筛选，而不是「无匹配」 */
+      const T = TOTAL();
+      const exLabel = exFilter === '1' ? '上交所' : '深交所';
+      el.innerHTML = '<b>' + T.l1 + '</b> 一级 · <b>' + T.l2 + '</b> 二级 · <b>'
+        + T.l3 + '</b> 三级 · 已按 <b>' + exLabel + '</b> 筛选，展开节点查看成分股';
+    } else {
+      const T = TOTAL();
+      el.innerHTML = '<b>' + T.l1 + '</b> 一级 · <b>' + T.l2 + '</b> 二级 · <b>' + T.l3 + '</b> 三级 · <b>' + T.st + '</b> 只股票';
+    }
+  })();
 
   // 展开的节点立即填充股票
   fillOpenL3();
@@ -800,44 +1331,18 @@ function chartHtml(data, days){
   </div>`;
 }
 
-/* ═══════════ 行业资金流 ═══════════ */
-/* 取某行业下所有成分股，汇总其模拟资金流 */
-function stocksOf(level, code){
-  const out = [];
-  TREE.forEach(l1 => l1.l2.forEach(l2 => {
-    l2.l3.forEach(l3 => {
-      if(level==='l1' && l1.c!==code) return;
-      if(level==='l2' && l2.c!==code) return;
-      if(level==='l3' && l3.c!==code) return;
-      (STOCKS[l3.c] || []).forEach(str => {
-        const [sc, sn, ex] = str.split('|');
-        out.push({code:sc, name:sn, ex, l1:l1.n, l1c:l1.c, l2:l2.n, l2c:l2.c, l3:l3.n, l3c:l3.c});
-      });
-    });
-  }));
-  return out;
-}
-
-/* 汇总多只股票的日序列 → 行业日序列 */
-function aggregate(comp, days){
-  if(!comp.length) return [];
-  const map = new Map();
-  comp.forEach(s => {
-    genSeries(s.code, s.name, days).forEach(d => {
-      if(!map.has(d.d)) map.set(d.d, 0);
-      map.set(d.d, map.get(d.d) + d.v);
-    });
-  });
-  const arr = [...map.entries()].map(([d,v])=>({d,v,cum:0}));
-  arr.sort((a,b)=>a.d<b.d?-1:1);
-  let c = 0;
-  arr.forEach(x => { c += x.v; x.cum = c; });
-  return arr;
-}
+/* ═══════════ 行业资金流 ═══════════
+   注：原文件在此处有 `stocksOf(level, code)`（取某行业下全部成分股）——
+   全文件**没有任何调用点**（行业资金流已改走后端 /industries/{c}/flow），
+   它每次还会并发拉取整棵子树的三级成分股。属死代码，已删除
+   （审查报告 6.1 P1 / 3.1）。 */
 
 let curIndustry = null;
 
-/* 无当前成分行业的提示（源端无数据 / 行业已废止，非系统缺失） */
+/* 无当前成分行业的提示（源端无数据 / 行业已废止，非系统缺失）。
+   审查报告 6.1 P1 / 6.4：这个函数原先**不可达** —— 对于数据源端就没有成分股的
+   三级行业（346 个里有 72 个），页面会渲染一个空的四档面板而不给任何说明。
+   现在由 renderIndustryBody() 在「序列为空」时调用。 */
 function showNoMember(level, code, name){
   const lv = level==='l1' ? '一级' : (level==='l2' ? '二级' : '三级');
   const box = document.getElementById('dBody');
@@ -846,7 +1351,8 @@ function showNoMember(level, code, name){
   if(!box) return;
 
   ttl.textContent = name;
-  meta.innerHTML = '<span class="num">' + code + '</span><span>' + lv + '行业</span>';
+  meta.innerHTML = '<span class="mode-badge">' + lv + '行业</span>' +
+    '<span class="num">' + esc(code) + '</span>';
   const qb = document.getElementById('quadBtn'); if(qb) qb.hidden = true;
 
   box.innerHTML =
@@ -869,94 +1375,8 @@ function showNoMember(level, code, name){
   document.getElementById('dClose').focus();
 }
 
-function openIndustry(level, code, name){
-  const comp = stocksOf(level, code);
-  if(!comp.length){ showNoMember(level, code, name); return; }
-  curIndustry = {level, code, name, comp};
-  const lvName = level==='l1' ? '一级行业' : (level==='l2' ? '二级行业' : '三级行业');
-  const parent = comp[0];
-
-  document.getElementById('dTitle').textContent = name;
-  document.getElementById('dMeta').innerHTML =
-    `<span class="mode-badge">${lvName}</span>
-     <span class="num">${code}</span>
-     <span>成分股 ${comp.length} 只</span>
-     <span style="color:var(--border-strong)">|</span>
-     ` + (level==='l1' ? `<span>${parent.l1}</span>`
-        : level==='l2' ? `<span>${parent.l1}</span>`
-        : `<span>${parent.l1}</span><span style="color:var(--text-dim)">›</span><span>${parent.l2}</span>`);
-
-  document.getElementById('quadBtn').hidden = true;
-  renderIndustryBody();
-  _lastFocus = document.activeElement;
-  document.getElementById('drawer').classList.add('open');
-  document.getElementById('scrim').classList.add('open');
-  document.getElementById('dClose').focus();
-}
-
-function renderIndustryBody(){
-  const {level, code, name, comp} = curIndustry;
-  const days = cur.days;
-  const series = aggregate(comp, days);
-  const net = series.reduce((s,d)=>s+d.v,0);
-  const inflowDays = series.filter(d=>d.v>0).length;
-  const best = series.reduce((a,b)=>Math.abs(b.v)>Math.abs(a.v)?b:a);
-  const maxCum = Math.max(...series.map(d=>d.cum));
-  const minCum = Math.min(...series.map(d=>d.cum));
-
-  // 成分股各自区间净流入排行
-  const perStock = comp.map(s=>{
-    const sd = genSeries(s.code, s.name, days);
-    return {...s, net: sd.reduce((a,d)=>a+d.v,0)};
-  }).sort((a,b)=>b.net-a.net);
-
-  const topN = perStock.slice(0, 40);
-  const compHtml = topN.map((s,i)=>
-    `<button class="comp-item" data-code="${s.code}" data-name="${esc(s.name)}">
-      <span class="comp-rank">${i+1}</span>
-      <span class="comp-code">${s.code}</span>
-      <span class="comp-name">${esc(s.name)}</span>
-      <span class="comp-val ${cls(s.net)}">${yi(s.net)}</span>
-    </button>`).join('');
-
-  const ranges = [[20,'近1月'],[60,'近3月'],[120,'近6月'],[242,'近1年']];
-  const rangeBtns = ranges.map(([n,label])=>
-    `<button data-days="${n}" aria-pressed="${days===n}">${label}</button>`).join('');
-
-  document.getElementById('dBody').innerHTML = `
-    <div class="data-note">⚠️<b>模拟数据</b>　以下资金流数值为演示生成，非真实行情，不可用于投资决策。</div>
-    <div class="range-bar">
-      <span class="lbl">时间范围</span>
-      <div class="seg" id="rangeSegI">${rangeBtns}</div>
-      <span class="lbl" style="margin-left:auto">${series.length} 个交易日</span>
-    </div>
-
-    <div class="sum">
-      <div class="sum-c"><div class="sum-l">区间净流入合计</div><div class="sum-v ${cls(net)}">${yi(net)}</div></div>
-      <div class="sum-c"><div class="sum-l">净流入天数</div><div class="sum-v">${inflowDays} <span style="font-size:13px;color:var(--text-dim)">/ ${series.length} 天</span></div></div>
-      <div class="sum-c"><div class="sum-l">单日最大净流入</div><div class="sum-v ${cls(best.v)}">${yi(best.v)}</div></div>
-      <div class="sum-c"><div class="sum-l">累计峰值 / 谷值</div><div class="sum-v" style="font-size:15px"><span class="up">${yi(maxCum)}</span> <span style="color:var(--text-dim)">/</span> <span class="down">${yi(minCum)}</span></div></div>
-    </div>
-
-    ${metricBlock(metrics(series, curIndustry.comp.reduce((a,c)=>a+amountBaseOf(c.code,c.name,days),0)), days, {isIndustry:true, code:curIndustry.code})}
-
-    ${chartHtml(series, days)}
-
-    <div class="sec-t">成分股区间净流入排行（前 ${topN.length} / ${comp.length} 只）</div>
-    <div class="comp-list">${compHtml}</div>
-  `;
-  bindChart(series);
-}
 /* 计算专业指标：连续性、波动率、强度、趋势 */
 /* 估算个股/行业的日均成交额基准（亿元）—— 用于计算相对强度 */
-function amountBaseOf(code, name, days){
-  const r = mulberry(seedOf(code + '|amt'));
-  const big = /^(贵州茅台|宁德时代|中国平安|招商银行|五粮液|比亚迪|隆基绿能|美的集团|长江电力|紫金矿业|中国石油|工商银行|农业银行|中国银行|中远海控|京沪高铁|恒瑞医药|海康威视|立讯精密|万华化学|东方财富)/.test(name);
-  // 日均成交额：大盘股 15-60 亿，中小盘 0.5-8 亿
-  const daily = big ? (15 + r()*45) : (0.5 + r()*7.5);
-  return daily * days;
-}
-
 /* 计算专业指标：连续性、波动率、强度、趋势加速度 */
 function metrics(data, amountBase){
   const n = data.length;
@@ -1033,25 +1453,10 @@ function percentileRank(value, allValues){
   return lo / sorted.length * 100;
 }
 
-/* 全市场二级行业强度排名（用于对比） */
-/* 全市场强度排名：按时间范围分键缓存，避免重复聚合 */
-const _rankCache = new Map();
-function marketRank(){
-  const d = period1Days();
-  if(_rankCache.has(d)) return _rankCache.get(d);
-  const map = new Map();
-  ALL_L2.forEach(l2 => {
-    const comp = stocksOf('l2', l2.code);
-    if(!comp.length) return;
-    const series = aggregate(comp, d);
-    const net = series.reduce((s,x)=>s+x.v,0);
-    let amt = 0;
-    comp.forEach(c => { amt += amountBaseOf(c.code, c.name, d); });
-    if(amt > 0) map.set(l2.code, {name: l2.n, net, strength: net/amt});
-  });
-  _rankCache.set(d, map);
-  return map;
-}
+/* 全市场二级行业强度排名（用于对比）。
+   注：原实现有一个 `const _rankCache = new Map()` 但**从来没有写入方**，
+   所以下面 `_rankCache.get(...)` 恒为 undefined，永远走异步分支
+   （审查报告 6.1 P1 / 6.3 P1）。已删除该缓存与分支，逻辑等价且更简单。 */
 function period1Days(){ return cur.days || 120; }
 
 function metricBlock(m, days, opts){
@@ -1073,21 +1478,16 @@ function metricBlock(m, days, opts){
   // P2 排名对比（仅行业层级）—— 先占位，异步填充以避免阻塞
   let rankHtml = '';
   if(opts && opts.isIndustry && opts.code){
-    const cached = _rankCache.get(period1Days());
-    if(cached){
-      rankHtml = rankBlockHtml(cached, opts.code);
-    } else {
-      rankHtml = `<div class="metric metric-wide" id="rankSlot">
-        <div class="metric-l">全市场强度排名</div>
-        <div class="metric-sub">正在计算…</div></div>`;
-      setTimeout(()=>{
-        const slot = document.getElementById('rankSlot');
-        if(!slot) return;
-        const rk = marketRank();
-        slot.outerHTML = rankBlockHtml(rk, opts.code) ||
-          '<div class="metric metric-wide"><div class="metric-l">全市场强度排名</div><div class="metric-sub">数据不足</div></div>';
-      }, 30);
-    }
+    rankHtml = `<div class="metric metric-wide" id="rankSlot">
+      <div class="metric-l">全市场强度排名</div>
+      <div class="metric-sub">正在计算…</div></div>`;
+    setTimeout(()=>{
+      const slot = document.getElementById('rankSlot');
+      if(!slot) return;
+      const rk = marketRank();
+      slot.outerHTML = rankBlockHtml(rk, opts.code) ||
+        '<div class="metric metric-wide"><div class="metric-l">全市场强度排名</div><div class="metric-sub">数据不足</div></div>';
+    }, 30);
   }
 
   return `
@@ -1155,52 +1555,6 @@ function percentileColor(p){
      小单 <4万   中单 4-20万   大单 20-100万   超大单 >100万
    约束：四档净额之和恒为 0 —— 主力(大+超大) 与 散户(小+中) 互为相反数 */
 const _quadCache = new Map();
-function genQuad(code, name, days){
-  const ck = code + '|q|' + days;
-  if(_quadCache.has(ck)) return _quadCache.get(ck);
-
-  const base = genSeries(code, name, days);
-  const r = mulberry(seedOf(code + name + '|quad'));
-  const big = /^(贵州茅台|宁德时代|中国平安|招商银行|五粮液|比亚迪|隆基绿能|美的集团|长江电力|紫金矿业|中国石油|工商银行|农业银行|中国银行|中远海控|京沪高铁|恒瑞医药|海康威视|立讯精密|万华化学|东方财富)/.test(name);
-
-  /* 建模原则：
-     主力与散户是博弈双方，不是按比例拆分。
-       主力净额 = 独立趋势 + 噪声（大盘股机构参与度高，量级更大）
-       散户净额 = -主力净额                （严格镜像，保证四档之和恒为 0）
-     四档再各自内部拆分，拆分和等于各自净额。 */
-  const scale = big ? 1.0 : 0.55;
-  const drift = (r() - 0.5) * 0.30;      // 主力长期倾向（正=吸筹，负=派发）
-
-  let acc = {sm:0, md:0, lg:0, elg:0};
-  const out = base.map(function(d){
-    const total = d.v;                                    // 当日总净流入
-    // 主力净额：以 total 为基准，叠加独立波动
-    const g = (r()+r()+r()+r()-2)/1.4;
-    const main = total * 0.5 + (drift + g*0.6) * Math.abs(total) * scale;
-    const retail = -main;                                 // 严格镜像
-    // 主力内部拆分
-    const elgR = 0.30 + r()*0.18;
-    const elg = main * elgR;
-    const lg  = main - elg;
-    // 散户内部拆分
-    const mdR = 0.34 + r()*0.14;
-    const md  = retail * mdR;
-    const sm  = retail - md;
-
-    acc.sm += sm; acc.md += md; acc.lg += lg; acc.elg += elg;
-    return {
-      d: d.d,
-      sm:+sm.toFixed(4), md:+md.toFixed(4), lg:+lg.toFixed(4), elg:+elg.toFixed(4),
-      main:+(lg+elg).toFixed(4), retail:+(sm+md).toFixed(4),
-      cumSm:+acc.sm.toFixed(4), cumMd:+acc.md.toFixed(4),
-      cumLg:+acc.lg.toFixed(4), cumElg:+acc.elg.toFixed(4),
-      cumMain:+(acc.lg+acc.elg).toFixed(4)
-    };
-  });
-  _quadCache.set(ck, out);
-  return out;
-}
-
 const QCOLOR = {sm:'var(--q-sm)', md:'var(--q-md)', lg:'var(--q-lg)', elg:'var(--q-elg)'};
 const QNAME  = {sm:'小单', md:'中单', lg:'大单', elg:'超大单'};
 const QRANGE = {sm:'< 4万', md:'4-20万', lg:'20-100万', elg:'> 100万'};
@@ -1220,6 +1574,7 @@ function axisNum(v){
 
 let qMode = 'main';
 let quadCtx = null;
+let _quadTok = 0;
 
 function quadChart(data, mode){
   const wrapEl = document.getElementById('qWrap');
@@ -1353,27 +1708,6 @@ function renderQuadBody(data){
   bindQuadTip(data);
 }
 
-function openQuad(code, name){
-  const s = ALL_STOCKS.find(function(x){return x.code===code;}) || {};
-  quadCtx = {code:code, name:name};
-  const days = cur.days || 120;
-  const data = genQuad(code, name, days);
-
-  document.getElementById('qTitle').textContent = name + ' · 四档资金流';
-  document.getElementById('qMeta').innerHTML =
-    '<span class="num">'+code+'</span>' +
-    '<span>'+(s.l1||'')+'</span><span style="color:var(--text-dim)">›</span>' +
-    '<span>'+(s.l2||'')+'</span><span style="color:var(--text-dim)">›</span>' +
-    '<span>'+(s.l3||'')+'</span>' +
-    '<span style="color:var(--border-strong)">|</span>' +
-    '<span>'+data.length+' 个交易日</span>';
-
-  renderQuadBody(data);
-  document.getElementById('qModal').classList.add('open');
-  document.getElementById('qScrim').classList.add('open');
-  document.getElementById('qClose').focus();
-}
-
 function closeQuad(){
   document.getElementById('qModal').classList.remove('open');
   document.getElementById('qScrim').classList.remove('open');
@@ -1404,72 +1738,6 @@ function bindQuadTip(qd){
 }
 
 /* ═══════════ 抽屉 ═══════════ */
-function openStock(code, name){
-  curIndustry = null;
-  const s = ALL_STOCKS.find(x=>x.code===code);
-  if(!s) return;
-  cur = {code, name, days:cur.days};
-
-  document.getElementById('dTitle').textContent = name;
-  document.getElementById('dMeta').innerHTML =
-    `<span class="num">${code}</span>
-     <span>${exName(s.ex)}</span>
-     <span style="color:var(--border-strong)">|</span>
-     <span>${s.l1}</span><span style="color:var(--text-dim)">›</span>
-     <span>${s.l2}</span><span style="color:var(--text-dim)">›</span>
-     <span>${s.l3}</span>`;
-
-  document.getElementById('quadBtn').hidden = false;
-  renderBody();
-  _lastFocus = document.activeElement;
-  document.getElementById('drawer').classList.add('open');
-  document.getElementById('scrim').classList.add('open');
-  document.getElementById('dClose').focus();
-}
-
-function renderBody(){
-  const s = ALL_STOCKS.find(x=>x.code===cur.code) || {l1:'',l2:'',l3:'',l1c:'',l2c:'',l3c:''};
-  const data = genSeries(cur.code, cur.name, cur.days);
-  const net = data.reduce((s,d)=>s+d.v,0);
-  const inflowDays = data.filter(d=>d.v>0).length;
-  const best = data.reduce((a,b)=>Math.abs(b.v)>Math.abs(a.v)?b:a);
-  const maxCum = Math.max(...data.map(d=>d.cum));
-  const minCum = Math.min(...data.map(d=>d.cum));
-
-  const ranges = [[20,'近1月'],[60,'近3月'],[120,'近6月'],[242,'近1年']];
-  const rangeBtns = ranges.map(([n,label])=>
-    `<button data-days="${n}" aria-pressed="${cur.days===n}">${label}</button>`).join('');
-
-  document.getElementById('dBody').innerHTML = `
-    <div class="data-note">⚠️<b>模拟数据</b>　以下资金流数值为演示生成，非真实行情，不可用于投资决策。</div>
-    <div class="range-bar">
-      <span class="lbl">时间范围</span>
-      <div class="seg" id="rangeSeg">${rangeBtns}</div>
-      <span class="lbl" style="margin-left:auto">${data.length} 个交易日</span>
-    </div>
-
-    <div class="sum">
-      <div class="sum-c"><div class="sum-l">区间净流入合计</div><div class="sum-v ${cls(net)}">${yi(net)}</div></div>
-      <div class="sum-c"><div class="sum-l">净流入天数</div><div class="sum-v">${inflowDays} <span style="font-size:13px;color:var(--text-dim)">/ ${data.length} 天</span></div></div>
-      <div class="sum-c"><div class="sum-l">单日最大净流入</div><div class="sum-v ${cls(best.v)}">${yi(best.v)}</div></div>
-      <div class="sum-c"><div class="sum-l">累计峰值 / 谷值</div><div class="sum-v" style="font-size:15px"><span class="up">${yi(maxCum)}</span> <span style="color:var(--text-dim)">/</span> <span class="down">${yi(minCum)}</span></div></div>
-    </div>
-
-    ${metricBlock(metrics(data, amountBaseOf(cur.code, cur.name, cur.days)), cur.days)}
-
-    ${chartHtml(data, cur.days)}
-
-    <div class="tree-path">
-      <div class="tp-t">所属行业层级</div>
-      <div class="tp-row"><span class="tp-k">一级</span><span class="tp-v">${s.l1} <em>${s.l1c}</em></span></div>
-      <div class="tp-row"><span class="tp-k">二级</span><span class="tp-v">${s.l2} <em>${s.l2c}</em></span></div>
-      <div class="tp-row"><span class="tp-k">三级</span><span class="tp-v">${s.l3} <em>${s.l3c}</em></span></div>
-    </div>
-  `;
-
-  bindChart();
-}
-
 /* ═══════════ 交互 ═══════════ */
 function bindChart(series){
   const svg = document.getElementById('svg');
@@ -1545,6 +1813,18 @@ document.getElementById('tree').addEventListener('click', e=>{
     openIndustry(flow.dataset.flow, flow.dataset.code, flow.dataset.name);
     return;
   }
+  /* 成分股加载失败后的「重试」：清掉失败标记并重新填充 */
+  const retry = e.target.closest('[data-retry]');
+  if(retry){
+    e.stopPropagation();
+    const node = retry.closest('.l3');
+    if(node){
+      node.dataset.filled = '0';
+      _memberCache.delete((node.dataset.gap === '1' ? 'gap|' : 'l3|') + node.dataset.code);
+      fillStocks(node);
+    }
+    return;
+  }
   const stock = e.target.closest('.stock');
   if(stock){ openStock(stock.dataset.code, stock.dataset.name); return; }
   const head = e.target.closest('[data-toggle]');
@@ -1554,9 +1834,15 @@ document.getElementById('tree').addEventListener('click', e=>{
     node.dataset.open = open ? '1' : '0';
     head.setAttribute('aria-expanded', String(open));
     if(open){
-      // 自身若是三级节点，直接填充；否则填充其后代三级节点
-      if(node.classList.contains('l3')) fillStocks(node);
-      node.querySelectorAll('.l3[data-open="1"]').forEach(fillStocks);
+      /* 自身若是三级节点，直接填充；否则填充其后代三级节点。
+         统一走 _fillPump 限流（展开一个大一级行业会牵出上百个三级节点）。 */
+      const targets = [];
+      if(node.classList.contains('l3')) targets.push(node);
+      node.querySelectorAll('.l3[data-open="1"]').forEach(function(n){
+        if(targets.indexOf(n) < 0) targets.push(n);
+      });
+      _fillQueue = _fillQueue.concat(targets);
+      _fillPump();
     }
   }
 });
@@ -1579,13 +1865,17 @@ document.getElementById('quadBtn').addEventListener('click', function(){
 });
 document.getElementById('qClose').addEventListener('click', closeQuad);
 document.getElementById('qScrim').addEventListener('click', closeQuad);
-document.getElementById('qTabs').addEventListener('click', function(e){
+document.getElementById('qTabs').addEventListener('click', async function(e){
   const b = e.target.closest('button'); if(!b) return;
   qMode = b.dataset.qm;
   Array.prototype.forEach.call(e.currentTarget.children, function(x){
     x.setAttribute('aria-pressed', String(x===b));
   });
-  if(quadCtx) renderQuadBody(genQuad(quadCtx.code, quadCtx.name, cur.days || 120));
+  if(!quadCtx) return;
+  const tok = ++_quadTok;
+  const data = await genQuad(quadCtx.code, quadCtx.name, cur.days || 120);
+  if(tok !== _quadTok) return;              /* 竞态：已有更新的切换请求 */
+  renderQuadBody(data);
 });
 document.getElementById('qNote').innerHTML = '按单笔成交金额划分：小单 &lt;4万，中单 4-20万，大单 20-100万，超大单 &gt;100万（开源证券研报标准）。<b>四档净额之和恒为 0</b>——每笔成交同时是某方的买入与对手方的卖出，因此真正有信息量的是<b>主力（大单+超大单）与散户（小单+中单）的对立方向</b>。';
 
@@ -1594,11 +1884,20 @@ document.getElementById('scrim').addEventListener('click', closeDrawer);
 document.addEventListener('keydown', trapFocus);
 document.addEventListener('keydown', treeKeydown);
 
-/* 搜索 */
+/* 搜索
+   原实现每次输入会 renderTree() 两次（:1747-1748 一次、searchStocks 完成后
+   再一次），而每次 renderTree 都要重建全部 511 个节点（审查报告 6.3 P0）。
+   现在：输入 → 只做本地行业名即时渲染；股票搜索回来后渲染一次。
+   同一关键词不重复渲染。 */
 let tq;
 document.getElementById('q').addEventListener('input', e=>{
   clearTimeout(tq);
-  tq = setTimeout(()=>{ term = e.target.value; if(STOCKS) renderTree(); }, 140);
+  const v = e.target.value;
+  tq = setTimeout(()=>{
+    term = v;
+    renderTree();          // 先按行业名即时渲染
+    searchStocks(v);       // 再异步查后端股票名，完成后自动重渲染
+  }, 200);
 });
 
 /* 交易所筛选 */
@@ -1606,7 +1905,7 @@ document.getElementById('exSeg').addEventListener('click', e=>{
   const b = e.target.closest('button'); if(!b) return;
   exFilter = b.dataset.ex;
   [...e.currentTarget.children].forEach(x=>x.setAttribute('aria-pressed', String(x===b)));
-  if(STOCKS) renderTree();
+  if(TREE_READY) renderTree();
 });
 
 /* 展收 */
@@ -1619,7 +1918,10 @@ document.getElementById('expandAll').addEventListener('click', ()=>{
   target.querySelector('.l1-head')?.setAttribute('aria-expanded','true');
   target.querySelectorAll('.l2,.l3').forEach(n=>n.dataset.open='1');
   target.querySelectorAll('.l2-head,.l3-head').forEach(n=>n.setAttribute('aria-expanded','true'));
-  target.querySelectorAll('.l3[data-open="1"]').forEach(fillStocks);
+  /* 走限流队列：一个一级行业下可能有几十个三级节点 */
+  _fillQueue = _fillQueue.concat(
+    Array.prototype.slice.call(target.querySelectorAll('.l3[data-open="1"]')));
+  _fillPump();
   target.scrollIntoView({block:'start', behavior:'smooth'});
 });
 document.getElementById('collapseAll').addEventListener('click', ()=>{
@@ -1659,7 +1961,8 @@ document.getElementById('collapseAll').addEventListener('click', ()=>{
           cur = cur.parentElement;
           if(cur && (cur.id === 'tree' || cur.tagName === 'BODY')) break;
         }
-        node.querySelectorAll('.l3').forEach(n=>{ n.dataset.open='1'; fillStocks(n); });
+        node.querySelectorAll('.l3').forEach(n=>{ n.dataset.open='1'; });
+        fillOpenL3();
         setTimeout(()=>{
           node.scrollIntoView({block:'center', behavior:'smooth'});
           node.querySelector(':scope > [data-toggle]')?.focus();
@@ -1667,22 +1970,26 @@ document.getElementById('collapseAll').addEventListener('click', ()=>{
       }
     }
   }).catch(err=>{
+    /* 空态 + 明确的可操作指引。原文案让用户去确认 data/stocks.json ——
+       但现行页面已完全 API 化、不再读该文件（审查报告 5.1.11 / 6.1 P1），
+       属误导性死文案，已更正。 */
     tree.innerHTML = '<div class="empty">' +
-      '数据加载失败：' + err.message + '<br><br>' +
-      '<span style="font-size:12px">请确认 <code>data/stocks.json</code> 与本文件在同一目录下。<br>' +
-      '若是直接双击打开，浏览器可能因安全策略拦截本地 fetch —— 请用本地服务器访问，例如在目录下执行：<br>' +
-      '<code style="color:#a9b0e0">python -m http.server 8000</code></span></div>';
+      '数据加载失败：' + esc(err.message) + '<br><br>' +
+      '<span style="font-size:12px">本页全部数据来自后端接口 ' +
+      '<code>/api/v1/industries/tree</code>，不读取任何本地 JSON 文件。<br>' +
+      '请确认后端已启动：<br>' +
+      '<code style="color:#a9b0e0">python -m uvicorn app.main:app --port 8000</code>' +
+      '（在 <code>backend/</code> 目录下执行）</span></div>';
   });
 })();
-/* ═══════════ 真实资金流接入（覆盖上方 mock 定义）═══════════ */
-const API_BASE = (location.protocol === 'file:') ? 'http://127.0.0.1:8000' : '';
-let DATA_DATE = null;
 
-async function apiGet(path){
-  const r = await fetch(API_BASE + path).then(x => x.json());
-  if(r.code !== 0) throw new Error(r.msg || '数据接口错误');
-  return r.data;
-}
+/* ═══════════ 真实资金流接入 ═══════════
+   API 封装（api/apiGet）、tsCode/bareCode 等由 common.js 提供。
+   原文件在此处又定义了一份 apiGet —— 它与上方的 _api() 错误契约不同
+   （_api 容忍响应缺 code 字段，apiGet 在 code !== 0 时抛错），
+   且两者都不处理 FastAPI 的 422 {"detail":[...]}（审查报告 6.4 / 6.5）。
+   现已合一到 common.js 的 api()，两套调用层收敛为一套。 */
+let DATA_DATE = null;
 
 function cumulate(arr){
   let c = 0;
@@ -1690,45 +1997,12 @@ function cumulate(arr){
   return arr;
 }
 
-/* 6 位代码 -> ts_code（带交易所后缀）；已带后缀则原样返回 */
-function tsCode(code){
-  if(!code) return code;
-  if(/\.(SH|SZ|BJ)$/.test(code)) return code;
-  if(/^[69]/.test(code)) return code + '.SH';
-  if(/^[023]/.test(code)) return code + '.SZ';
-  return code + '.BJ';
-}
-/* ts_code -> 6 位代码 */
-function bareCode(code){
-  return (code || '').replace(/\.(SH|SZ|BJ)$/, '');
-}
-
-/* 个股资金流序列（真实） */
-async function genSeries(code, name, days){
-  const ck = code + '|' + days;
-  if(_seriesCache.has(ck)) return _seriesCache.get(ck);
-  const p = (async () => {
-    try {
-      const d = await apiGet('/api/v1/stocks/' + tsCode(code) + '/flow');
-      return cumulate((d.series || []).slice(-days).map(x => ({d:x.d, v:x.net ?? 0})));
-    } catch(e){ return []; }
-  })();
-  _seriesCache.set(ck, p);
-  return p;
-}
-
-/* 行业资金流（真实；二级已聚合，一级/三级暂未聚合） */
-async function aggregate(comp, days){
-  const code = (comp && comp[0]) ? (comp[0].l2c || comp[0].l3c || comp[0].l1c) : null;
-  if(!code) return [];
-  try {
-    const d = await apiGet('/api/v1/industries/' + code + '/flow');
-    return cumulate((d.series || []).slice(-days).map(x => ({d:x.d, v:x.net ?? 0})));
-  } catch(e){ return []; }
-}
-
-/* 成交额基准：真实数据下由 turnover 直接提供，此函数保留兼容 */
-function amountBaseOf(code, name, days){ return 0; }
+/* 个股资金流序列。
+   注：原有一个 `genSeries(code,name,days)` 使用 `_seriesCache`，
+   但 `_seriesCache` 的声明已被删除（HEAD:552），而 genSeries 全文件
+   **没有任何调用点** —— 潜伏的 ReferenceError + 死代码（审查报告 3.1 / 6.1）。
+   已整体删除。同批删除的还有 `aggregate()`（无调用点）与
+   `amountBaseOf()`（恒返回 0 且无调用点）。 */
 
 /* 四档资金流（真实） */
 async function genQuad(code, name, days){
@@ -1766,7 +2040,7 @@ async function renderIndustryBody(){
   box.innerHTML = '<div class="empty">正在加载真实资金流…</div>';
 
   let series = [], turnover = 0;
-  if(level === 'l2'){
+  { /* L1/L2/L3 统一处理 */
     try {
       const d = await apiGet('/api/v1/industries/' + code + '/flow');
       const raw = (d.series || []).slice(-days);
@@ -1776,7 +2050,7 @@ async function renderIndustryBody(){
   }
 
   let compHtml = '', topCount = 0;
-  if(level === 'l2'){
+  { /* L1/L2/L3 统一处理 */
     try {
       const sf = await apiGet('/api/v1/industries/' + code + '/stocks-flow?limit=40');
       topCount = (sf.list || []).length;
@@ -1792,15 +2066,25 @@ async function renderIndustryBody(){
 
   const net = series.reduce((s,d)=>s+d.v,0);
   const inflowDays = series.filter(d=>d.v>0).length;
-  const best = series.reduce((a,b)=>Math.abs(b.v)>Math.abs(a.v)?b:a, {d:'', v:0, cum:0});
+  /* 单日最大净流入：取**最大值**，不取绝对值。
+     原实现用 Math.abs 比较再交给 fmt 定符号，于是一天净流出 50 亿也会被
+     显示成「单日最大净流入 +50 亿」（审查报告 6.1 P1）。 */
+  const bestIn  = series.reduce((a,b)=>b.v>a.v?b:a, {d:'', v:0, cum:0});
+  const bestOut = series.reduce((a,b)=>b.v<a.v?b:a, {d:'', v:0, cum:0});
   const maxCum = Math.max(0, ...series.map(d=>d.cum));
   const minCum = Math.min(0, ...series.map(d=>d.cum));
   const ranges = [[20,'近1月'],[60,'近3月'],[120,'近6月'],[242,'近1年']];
   const rangeBtns = ranges.map(([n,label])=>'<button data-days="'+n+'" aria-pressed="'+(days===n)+'">'+label+'</button>').join('');
 
-  const note = level === 'l2'
-    ? '<div class="data-note">✅ 真实数据' + (DATA_DATE ? ' · 数据日期 ' + DATA_DATE : '') + '　·　不构成投资建议</div>'
-    : '<div class="data-note">⚠️ 该层级资金流暂未聚合（当前仅二级行业已接入），请下钻到二级行业查看。</div>';
+  const note = '<div class="data-note">✅ 真实数据' + (DATA_DATE ? ' · 数据日期 ' + esc(DATA_DATE) : '') + '　·　不构成投资建议</div>';
+
+  /* 空态（审查报告 6.1 P1 / 6.4）：数据源端就没有成分股的三级行业
+     （346 个里有 72 个）此前会渲染出一个空的四档面板而不给任何说明。
+     现在改走 showNoMember —— 该函数原本存在但不可达。 */
+  if(!series.length && !topCount){
+    showNoMember(level, code, name);
+    return;
+  }
 
   box.innerHTML =
     note +
@@ -1812,7 +2096,8 @@ async function renderIndustryBody(){
     '<div class="sum">' +
       '<div class="sum-c"><div class="sum-l">区间净流入合计</div><div class="sum-v ' + cls(net) + '">' + yi(net) + '</div></div>' +
       '<div class="sum-c"><div class="sum-l">净流入天数</div><div class="sum-v">' + inflowDays + ' <span style="font-size:13px;color:var(--text-dim)">/ ' + series.length + ' 天</span></div></div>' +
-      '<div class="sum-c"><div class="sum-l">单日最大净流入</div><div class="sum-v ' + cls(best.v) + '">' + yi(best.v) + '</div></div>' +
+      '<div class="sum-c"><div class="sum-l">单日最大净流入</div><div class="sum-v ' + cls(bestIn.v) + '">' + yi(bestIn.v) + '</div></div>' +
+      '<div class="sum-c"><div class="sum-l">单日最大净流出</div><div class="sum-v ' + cls(bestOut.v) + '">' + yi(bestOut.v) + '</div></div>' +
       '<div class="sum-c"><div class="sum-l">累计峰值 / 谷值</div><div class="sum-v" style="font-size:15px"><span class="up">' + yi(maxCum) + '</span> <span style="color:var(--text-dim)">/</span> <span class="down">' + yi(minCum) + '</span></div></div>' +
     '</div>' +
     metricBlock(metrics(series, turnover), days, {isIndustry:true, code:code}) +
@@ -1824,26 +2109,52 @@ async function renderIndustryBody(){
 }
 
 async function openIndustry(level, code, name){
-  const comp = stocksOf(level, code);
-  if(!comp.length) return;
-  curIndustry = {level, code, name, comp};
   const lvName = level==='l1' ? '一级行业' : (level==='l2' ? '二级行业' : '三级行业');
-  const parent = comp[0];
+
+  /* 面包屑从已加载的树里取，不再加载整个行业的成分股 */
+  const crumbs = industryBreadcrumb(level, code);
+  const self = crumbs.length ? crumbs[crumbs.length - 1] : null;
+
+  curIndustry = { level, code, name, crumbs };
+
   document.getElementById('dTitle').textContent = name;
   document.getElementById('dMeta').innerHTML =
-    '<span class="mode-badge">' + lvName + '</span><span class="num">' + code + '</span><span>成分股 ' + comp.length + ' 只</span><span style="color:var(--border-strong)">|</span>' +
-    (level==='l3' ? '<span>'+parent.l1+'</span><span style="color:var(--text-dim)">›</span><span>'+parent.l2+'</span>' : '<span>'+parent.l1+'</span>');
+    '<span class="mode-badge">' + lvName + '</span>' +
+    '<span class="num">' + esc(code) + '</span>' +
+    (self && self.memberCount != null ? '<span>成分股 ' + self.memberCount + ' 只</span>' : '') +
+    '<span style="color:var(--border-strong)">|</span>' +
+    crumbs.map(function(x){ return '<span>' + esc(x.name) + '</span>'; })
+          .join('<span style="color:var(--text-dim)">›</span>');
+
   document.getElementById('quadBtn').hidden = true;
-  await renderIndustryBody();
+
   _lastFocus = document.activeElement;
   document.getElementById('drawer').classList.add('open');
   document.getElementById('scrim').classList.add('open');
   document.getElementById('dClose').focus();
+
+  await renderIndustryBody();
+}
+
+/* 从树中解析行业面包屑：[{name, code, memberCount}] */
+function industryBreadcrumb(level, code){
+  for(const l1 of TREE){
+    if(level === 'l1' && l1.c === code) return [{name:l1.n, code:l1.c, memberCount:l1.k}];
+    for(const l2 of (l1.l2 || [])){
+      if(level === 'l2' && l2.c === code)
+        return [{name:l1.n, code:l1.c}, {name:l2.n, code:l2.c, memberCount:l2.k}];
+      for(const l3 of (l2.l3 || [])){
+        if(level === 'l3' && l3.c === code)
+          return [{name:l1.n, code:l1.c}, {name:l2.n, code:l2.c}, {name:l3.n, code:l3.c, memberCount:l3.k}];
+      }
+    }
+  }
+  return [];
 }
 
 /* ── 个股详情 ── */
 async function renderBody(){
-  const s = ALL_STOCKS.find(x=>x.code===cur.code) || {l1:'',l2:'',l3:'',l1c:'',l2c:'',l3c:''};
+  const s = cur._s || stockIndustry(cur.code, cur.tsCode) || {l1:'',l2:'',l3:'',l1c:'',l2c:'',l3c:''};
   const box = document.getElementById('dBody');
   box.innerHTML = '<div class="empty">正在加载真实资金流…</div>';
 
@@ -1857,14 +2168,15 @@ async function renderBody(){
 
   const net = data.reduce((s,d)=>s+d.v,0);
   const inflowDays = data.filter(d=>d.v>0).length;
-  const best = data.reduce((a,b)=>Math.abs(b.v)>Math.abs(a.v)?b:a, {d:'',v:0,cum:0});
+  /* 同 renderIndustryBody：取最大值而非绝对值（审查报告 6.1 P1） */
+  const best = data.reduce((a,b)=>b.v>a.v?b:a, {d:'',v:0,cum:0});
   const maxCum = Math.max(0, ...data.map(d=>d.cum));
   const minCum = Math.min(0, ...data.map(d=>d.cum));
   const ranges = [[20,'近1月'],[60,'近3月'],[120,'近6月'],[242,'近1年']];
   const rangeBtns = ranges.map(([n,label])=>'<button data-days="'+n+'" aria-pressed="'+(cur.days===n)+'">'+label+'</button>').join('');
 
   box.innerHTML =
-    '<div class="data-note">✅ 真实数据' + (DATA_DATE ? ' · 数据日期 ' + DATA_DATE : '') + '　·　不构成投资建议</div>' +
+    '<div class="data-note">✅ 真实数据' + (DATA_DATE ? ' · 数据日期 ' + esc(DATA_DATE) : '') + '　·　不构成投资建议</div>' +
     '<div class="range-bar">' +
       '<span class="lbl">时间范围</span>' +
       '<div class="seg" id="rangeSeg">' + rangeBtns + '</div>' +
@@ -1878,46 +2190,66 @@ async function renderBody(){
     '</div>' +
     metricBlock(metrics(data, turnover), cur.days) +
     chartHtml(data, cur.days) +
+    /* ⚠ XSS 修复点（审查报告 6.2.1 明确点名的 2055-2057）
+       行业名从「明文 HTTP 上游」进库，此前被**未转义**地拼进 innerHTML。
+       同文件其余 15 处都调了 esc，唯独这里是漏网点 —— 这种「看起来是安全的」
+       不一致比完全没转义更危险。 */
     '<div class="tree-path">' +
       '<div class="tp-t">所属行业层级</div>' +
-      '<div class="tp-row"><span class="tp-k">一级</span><span class="tp-v">' + s.l1 + ' <em>' + s.l1c + '</em></span></div>' +
-      '<div class="tp-row"><span class="tp-k">二级</span><span class="tp-v">' + s.l2 + ' <em>' + s.l2c + '</em></span></div>' +
-      '<div class="tp-row"><span class="tp-k">三级</span><span class="tp-v">' + s.l3 + ' <em>' + s.l3c + '</em></span></div>' +
+      '<div class="tp-row"><span class="tp-k">一级</span><span class="tp-v">' + esc(s.l1) + ' <em>' + esc(s.l1c) + '</em></span></div>' +
+      '<div class="tp-row"><span class="tp-k">二级</span><span class="tp-v">' + esc(s.l2) + ' <em>' + esc(s.l2c) + '</em></span></div>' +
+      '<div class="tp-row"><span class="tp-k">三级</span><span class="tp-v">' + esc(s.l3) + ' <em>' + esc(s.l3c) + '</em></span></div>' +
     '</div>';
 
   bindChart(data);
 }
 
-async function openStock(code, name){
+async function openStock(code, name, tsCode){
   curIndustry = null;
-  const s = ALL_STOCKS.find(x=>x.code===code);
-  if(!s) return;
+
+  /* 行业归属从成分股缓存/树里解析（ALL_STOCKS 已废弃） */
+  const s = stockIndustry(code, tsCode) || {};
+
   const days = cur.days;
-  cur = {code, name, days};
+  cur = { code, name, days, tsCode: s.tsCode, _s: s };
+
   document.getElementById('dTitle').textContent = name;
+
+  const crumbs = [s.l1, s.l2, s.l3].filter(Boolean);
+  /* ⚠ XSS 修复点（审查报告 6.2.1 点名的 2075-2082）：crumbs 里是上游来的行业名，
+     此前逐个裸拼进 innerHTML。 */
   document.getElementById('dMeta').innerHTML =
-    '<span class="num">' + code + '</span><span>' + exName(s.ex) + '</span><span style="color:var(--border-strong)">|</span>' +
-    '<span>' + s.l1 + '</span><span style="color:var(--text-dim)">›</span><span>' + s.l2 + '</span><span style="color:var(--text-dim)">›</span><span>' + s.l3 + '</span>';
+    '<span class="num">' + esc(code) + '</span>' +
+    (s.ex !== undefined ? '<span>' + esc(exName(s.ex)) + '</span>' : '') +
+    (crumbs.length
+      ? '<span style="color:var(--border-strong)">|</span>' +
+        crumbs.map(function(x){ return '<span>' + esc(x) + '</span>'; })
+             .join('<span style="color:var(--text-dim)">›</span>')
+      : '');
+
   document.getElementById('quadBtn').hidden = false;
-  await renderBody();
+
   _lastFocus = document.activeElement;
   document.getElementById('drawer').classList.add('open');
   document.getElementById('scrim').classList.add('open');
   document.getElementById('dClose').focus();
+
+  await renderBody();
 }
 
 /* ── 四档 ── */
 async function openQuad(code, name){
-  const s = ALL_STOCKS.find(x=>x.code===code) || {};
+  const s = stockIndustry(code) || {};
   quadCtx = {code, name};
   const days = cur.days || 120;
   const data = await genQuad(code, name, days);
   document.getElementById('qTitle').textContent = name + ' · 四档资金流';
+  /* ⚠ XSS 修复点（审查报告 6.2.1 点名的 2101-2105）：s.l1/l2/l3 是上游行业名。 */
   document.getElementById('qMeta').innerHTML =
-    '<span class="num">' + code + '</span>' +
-    '<span>' + (s.l1||'') + '</span><span style="color:var(--text-dim)">›</span>' +
-    '<span>' + (s.l2||'') + '</span><span style="color:var(--text-dim)">›</span>' +
-    '<span>' + (s.l3||'') + '</span>' +
+    '<span class="num">' + esc(code) + '</span>' +
+    '<span>' + esc(s.l1||'') + '</span><span style="color:var(--text-dim)">›</span>' +
+    '<span>' + esc(s.l2||'') + '</span><span style="color:var(--text-dim)">›</span>' +
+    '<span>' + esc(s.l3||'') + '</span>' +
     '<span style="color:var(--border-strong)">|</span>' +
     '<span>' + data.length + ' 个交易日 · 真实数据</span>';
   renderQuadBody(data);
@@ -1941,10 +2273,10 @@ function renderDataBar(ok, meta){
     bar.className = 'warn ok';
     ico.textContent = '✓';
     /* 只陈述资金流数据日期，不列行业数量
-       （行业树使用页面内嵌快照，与后端分类存在少量差异，列数量会造成矛盾） */
+       （行业数量以 /meta 的 industryCount 为准，避免两处口径打架） */
     txt.innerHTML = '<b>真实数据</b>　资金流数据日期 <span class="num">' +
-      (meta.dataEnd || '—') + '</span>' +
-      '　·　数据区间 ' + range +
+      esc(meta.dataEnd || '—') + '</span>' +
+      '　·　数据区间 ' + esc(range) +
       '　·　数据源 Tushare 兼容代理';
   } else {
     bar.className = 'warn err';
@@ -1958,6 +2290,10 @@ function renderDataBar(ok, meta){
   apiGet('/api/v1/meta')
     .then(d => { if(d && d.dataEnd) DATA_DATE = d.dataEnd; renderDataBar(true, d); })
     .catch(()=>{ renderDataBar(false); });
+  /* 注：/strength 是全历史累计口径（sum(net)/sum(turnover)），而页面自身的
+     相对强度是**窗口内**口径 —— 两者不可比，排名结果没有意义
+     （审查报告 6.3 P1 / 5.7.10）。此处保留拉取以便后续统一口径，
+     但排名块会在口径不一致时明确标注。 */
   apiGet('/api/v1/strength').then(res => {
     (res.list || []).forEach(x => _rankMap.map.set(x.swCode, {name:x.name, net:x.net, strength:x.strength}));
   }).catch(()=>{});
