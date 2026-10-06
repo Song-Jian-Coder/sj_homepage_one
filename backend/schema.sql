@@ -106,7 +106,14 @@ CREATE TABLE IF NOT EXISTS t_industry_flow (
   KEY idx_level_date (level, trade_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 采集审计日志
+-- 采集审计日志（ETL 每次运行写一行：开始 status='running'，结束改 success/partial/failed）
+-- status='running' 且 start_at 在 FETCH_STALE_MINUTES 内 → /api/v1/admin/fetch 拒绝新任务
+-- （跨进程并发护栏，见 app/services/admin.py:db_fetch_running）
+-- 字段口径：
+--   rows_fetched  从数据源取回的行数（含翻页累加）
+--   rows_written  提交给 MySQL 的行数（= len(data)，非 affected_rows；
+--                 ODKU 的 affected 语义是「新增计 1、更新计 2、未变计 0」，
+--                 真实新增/更新请看 etl_run.log 的聚合行日志）
 CREATE TABLE IF NOT EXISTS t_fetch_log (
   id           BIGINT UNSIGNED AUTO_INCREMENT,
   task_name    VARCHAR(64) NOT NULL,

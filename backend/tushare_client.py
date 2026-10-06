@@ -17,12 +17,28 @@ DEFAULT_QPS_DELAY = 0.25        # 秒/次 → 上限 240 次/分钟（低于 300
 DEFAULT_RATE_LIMIT_WAIT = 15    # 命中 40203 后的基准退避秒数（15s/30s/45s…）
 
 
+def _norm_int(v):
+    """代理对部分整数参数只接受整数：传 "" 会报 40101「参数错误」，传 "6000" 也需转 int。
+
+    空值一律视为「不传该参数」，避免 offset='' 触发参数校验失败。
+    """
+    if v is None or v == "":
+        return None
+    return int(v)
+
+
 class DataSourceError(RuntimeError):
     """数据源返回 code != 0，不可重试或重试已耗尽。"""
 
 
 class RateLimitError(DataSourceError):
     """数据源限流（code=40203），可退避重试。"""
+
+
+DEFAULT_MAX_ROWS = 6000          # 单次请求的 max_rows（服务端实测忽略该值，见下）
+PAGE_LIMIT = 6000                # 服务端硬顶：跨多日查询一次最多回 6000 行。
+#                                  也是 etl._call_paged() 的默认翻页步长 —— 全部分页
+#                                  都走它，避免像改造前那样把 has_more 丢掉。
 
 
 class TushareClient:
@@ -44,15 +60,30 @@ class TushareClient:
             if gap < self.qps_delay:
                 time.sleep(self.qps_delay - gap)
 
-    def call(self, api_name, **params):
+    def call(self, api_name, max_rows=None, **params):
         """返回 (rows: list[dict], has_more: bool)。
 
         - 每次请求前节流（间隔 >= qps_delay）
         - code=40203 → 退避 rate_limit_wait*(attempt+1) 秒后重试
         - 其它异常 → 指数退避 2**attempt 秒后重试
+        - max_rows：按官方 tushare 语义应为「单次返回行数上限」，但 sxsc-tushare 代理
+          实测**完全忽略**该参数（max_rows=10 与 20000 均返回全量 5572 行）。
+          代理真正的硬顶固定为 6000 行，超限时返回 has_more=True，须配合 offset 翻页
+          （实测 offset 语义 = 跳过前 N 条，精确；limit 亦生效）。故此处保留该字段仅为
+          契约兼容，不要依赖它来限制返回量。
         """
+        # offset/limit 规范化：代理对这两个参数做整数校验（传 "" 报 40101），
+        # 空值直接剔除，避免调用方传空字符串时整条请求失败。
+        for k in ("offset", "limit"):
+            if k in params:
+                nv = _norm_int(params.get(k))
+                if nv is None:
+                    params.pop(k)
+                else:
+                    params[k] = nv
         payload = {"api_name": api_name, "token": self.token,
-                   "params": params, "max_rows": 6000}
+                   "params": params,
+                   "max_rows": int(max_rows or DEFAULT_MAX_ROWS)}
         last_err = None
         for attempt in range(self.max_retries):
             self._throttle()
