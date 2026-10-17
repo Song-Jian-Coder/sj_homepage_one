@@ -156,9 +156,16 @@ def _fetch_day_paged(client, log, rep, ds_str, page_size, api="moneyflow", **ext
 
     历史上这里在 has_more=True 时不带 offset 重发同一个请求，只会反复拿到同一批
     6000 行，靠翻页护栏空转 50 次——等于没有分页能力。现改为累加 offset。
+
+    trade_date 由本函数的 ds_str 参数决定，**不接受**由 extra 传入：
+    2026-10-17 的实跑就栽在这里——sync_moneyflow 既传位置参数 ds_str，又传
+    trade_date=ds_str，`**extra` 展开后直接 TypeError，7 个交易日全军覆没
+    （错误还被逐日 try/except 吞成「单日失败」，只有翻日志才看得见）。
+    现改为显式构造 params 并覆盖，调用方多传一次也不会炸。
     """
-    return _call_paged(client, log, rep, api, page_size=page_size,
-                       trade_date=ds_str, **extra)
+    params = dict(extra)
+    params["trade_date"] = ds_str
+    return _call_paged(client, log, rep, api, page_size=page_size, **params)
 
 
 # ───────────────────────── 审计（t_fetch_log）─────────────────────────
@@ -404,7 +411,7 @@ def sync_moneyflow(client, conn, log, rep, days, mode="full",
         ds_str = d_.strftime("%Y%m%d") if hasattr(d_, "strftime") else str(d_)
         try:
             rows, truncated = _fetch_day_paged(client, log, rep, ds_str, page_size,
-                                               api="moneyflow", trade_date=ds_str)
+                                               api="moneyflow")
             if truncated:
                 truncated_days.append(ds_str)
             if not rows:

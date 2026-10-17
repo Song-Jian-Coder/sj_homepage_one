@@ -234,3 +234,66 @@ def test_ttl_cache_hits_returns_copy_and_expires():
     assert c.get("k") == {"v": 1}
     time.sleep(0.2)
     assert c.get("k") is None
+
+
+# ───────────── ETL 单日采集链路（2026-10-17 实跑回归）─────────────
+# 事故：sync_moneyflow 既传位置参数 ds_str、又传 trade_date=ds_str，
+# _fetch_day_paged 内部 `**extra` 展开后 TypeError: got multiple values for
+# keyword argument 'trade_date'，7 个交易日全部失败且被逐日 try/except 吞成
+# 「单日失败」。原测试只覆盖 _call_paged，从未走通 sync_moneyflow → 落库。
+class _FixedClient:
+    """每次调用都返回同一页（单日数据只有一页）。"""
+
+    def __init__(self, rows):
+        self.rows = list(rows)
+        self.calls = []
+
+    def call(self, api, max_rows=None, **params):
+        self.calls.append({"api": api, "max_rows": max_rows, "params": dict(params)})
+        return list(self.rows), False
+
+
+def _one_day_rows():
+    return [{"ts_code": "000001.SZ", "trade_date": "20261016",
+             **{c: 1.0 for c in etl.MF_NUM}}]
+
+
+def test_fetch_day_paged_passes_trade_date_exactly_once():
+    client = _FixedClient(_one_day_rows())
+    rep = etl.RunReport(_FakeLog())
+    rows, truncated = etl._fetch_day_paged(client, rep.log, rep, "20261016", 6000,
+                                           api="moneyflow")
+    assert truncated is False and len(rows) == 1
+    assert client.calls[0]["params"]["trade_date"] == "20261016"
+    assert client.calls[0]["params"]["offset"] == 0
+    # 调用方多传一次也不得抛 TypeError（原事故就是这一行）
+    rows2, _ = etl._fetch_day_paged(client, rep.log, rep, "20261016", 6000,
+                                    api="moneyflow", trade_date="20261016")
+    assert len(rows2) == 1
+    assert client.calls[-1]["params"]["trade_date"] == "20261016"
+
+
+def test_sync_moneyflow_full_mode_writes_the_day():
+    """走通 sync_moneyflow → _fetch_day_paged → executemany 全链路。"""
+    from datetime import date
+    from conftest import FakeConn
+
+    conn = FakeConn([
+        ("FROM t_trade_cal WHERE is_open=1 AND cal_date <= CURDATE()", [(date(2026, 10, 16),)]),
+        ("SELECT MAX(trade_date) FROM t_moneyflow", [(date(2026, 10, 15),)]),
+    ])
+    client = _FixedClient(_one_day_rows())
+    log = _FakeLog()
+    rep = etl.RunReport(log)
+
+    written = etl.sync_moneyflow(client, conn, log, rep, days=1, mode="full",
+                                 page_size=6000)
+
+    assert written == ["20261016"]          # 原事故：返回 []，且 rep.failed_days 有 1 条
+    assert rep.failed_days == []
+    assert rep.problems == []
+    assert rep.rows_fetched == 1 and rep.rows_written == 1
+    inserts = [args for sql, args in conn.sql_seen if sql.startswith("INSERT INTO t_moneyflow")]
+    assert len(inserts) == 1 and len(inserts[0]) == 1
+    assert inserts[0][0]["trade_date"] == "20261016"
+    assert client.calls[0]["params"]["trade_date"] == "20261016"

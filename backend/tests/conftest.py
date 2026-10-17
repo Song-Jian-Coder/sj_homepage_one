@@ -36,10 +36,17 @@ class FakeCursor:
         self.conn = conn
         self.dict_mode = dict_mode
         self.result = []
+        self.rowcount = 0
 
     def execute(self, sql, args=None):
         self.conn.sql_seen.append((" ".join(sql.split()), args))
         self.result = self.conn.answer(sql, args)
+
+    def executemany(self, sql, rows):
+        """批量写（ETL 落库路径）。只记录，不校验 SQL 文本本身。"""
+        rows = list(rows)
+        self.conn.sql_seen.append((" ".join(sql.split()), rows))
+        self.rowcount = len(rows)
 
     def fetchone(self):
         return self.result[0] if self.result else None
