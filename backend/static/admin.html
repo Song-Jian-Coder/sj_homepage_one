@@ -10,19 +10,62 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- 防闪烁（FOUC）：必须在 CSS 之前定好 data-theme。
+     不能调用 common.js 的 themeGet —— 外部脚本执行时机在本段之后。
+     规则与 SW.themeGet 一致：?theme= > localStorage > 默认 light。 -->
+<script>
+(function(){try{
+  var m=/[?&]theme=([a-z]+)/i.exec(location.search),q=m&&m[1].toLowerCase();
+  var s=null;try{s=localStorage.getItem('sw-theme')}catch(e){}
+  var t=(q==='dark'||q==='light')?q:((s==='dark'||s==='light')?s:'light');
+  var r=document.documentElement;
+  r.setAttribute('data-theme',t);
+  r.style.colorScheme=(t==='dark')?'dark':'light';
+}catch(e){}})();
+</script>
 <style>
+/* ══════════════════════════════════════════════════════════════
+   主题：明亮（daylight，默认） / 暗色（?theme=dark 或右上角切换）
+   ⚠ 本页「正号=绿、负号=红」的约定与看板相反，变量名用 --ok/--err，
+     CSS 里 .pos=--err、.neg=--ok —— 换主题不改变语义，只改色值。
+   ══════════════════════════════════════════════════════════════ */
 :root{
-  --bg:#0a0b0d; --bg-elev:#101114; --surface:#16181c; --surface-2:#1c1f24; --surface-3:#23272d;
-  --border:#23262c; --border-strong:#2f333a;
-  --text:#e8eaed; --text-muted:#8b9199; --text-dim:#5f666e;
-  --ok:#00c48c; --ok-dim:rgba(0,196,140,.12); --ok-line:rgba(0,196,140,.3);
-  --warn:#f5a524; --warn-dim:rgba(245,165,36,.12); --warn-line:rgba(245,165,36,.3);
-  --err:#f2436b; --err-dim:rgba(242,67,107,.12); --err-line:rgba(242,67,107,.3);
-  --accent:#5e6ad2; --accent-dim:rgba(94,106,210,.12); --accent-line:rgba(94,106,210,.35);
+  /* 层次 */
+  --bg:#fbfcfd; --bg-elev:#ffffff; --surface:#f4f6f8; --surface-2:#eef1f4; --surface-3:#e7ebef;
+  /* 线条 */
+  --border:#e3e8ed; --border-strong:#cfd6de;
+  /* 文字 */
+  --text:#14181d; --text-muted:#4a5460; --text-dim:#66717e;
+  /* 状态 */
+  --ok:#0b7d59; --ok-hover:#086b4c; --ok-dim:rgba(11,125,89,.08); --ok-line:rgba(11,125,89,.28); --ok-text:#075c41;
+  --warn:#9a5c00; --warn-dim:rgba(154,92,0,.08); --warn-line:rgba(154,92,0,.28); --warn-text:#7d4b00;
+  --err:#c92a3a; --err-dim:rgba(201,42,58,.08); --err-line:rgba(201,42,58,.28); --err-text:#a3242a;
+  /* 强调色 */
+  --accent:#4a55c8; --accent-hover:#3d47b4;
+  --accent-dim:rgba(74,85,200,.08); --accent-line:rgba(74,85,200,.28); --accent-text:#3f49b0;
+  --accent-on:#ffffff;      /* accent 底上的文字色 */
+  /* 主题相关中性填充 */
+  --code-bg:rgba(16,24,40,.05);
+  --ghost-hover-edge:#c3ccd6;
+  --btn-accent-fg:#ffffff;  /* 明亮下 --ok 足够深，白字可读；暗色下需深字 */
   --font:'Inter','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
   --mono:'JetBrains Mono',Consolas,monospace;
   --r-sm:6px; --r:10px; --r-lg:14px;
   --ease:cubic-bezier(.22,.61,.36,1);
+}
+html[data-theme="dark"]{
+  --bg:#0a0b0d; --bg-elev:#101114; --surface:#16181c; --surface-2:#1c1f24; --surface-3:#23272d;
+  --border:#23262c; --border-strong:#2f333a;
+  --text:#e8eaed; --text-muted:#8b9199; --text-dim:#5f666e;
+  --ok:#00c48c; --ok-hover:#1ad39b; --ok-dim:rgba(0,196,140,.12); --ok-line:rgba(0,196,140,.3); --ok-text:#4fd9b0;
+  --warn:#f5a524; --warn-dim:rgba(245,165,36,.12); --warn-line:rgba(245,165,36,.3); --warn-text:#e0b775;
+  --err:#f2436b; --err-dim:rgba(242,67,107,.12); --err-line:rgba(242,67,107,.3); --err-text:#f08ba6;
+  --accent:#5e6ad2; --accent-hover:#6b76da;
+  --accent-dim:rgba(94,106,210,.12); --accent-line:rgba(94,106,210,.35); --accent-text:#a9b0e0;
+  --accent-on:#ffffff;
+  --code-bg:rgba(0,0,0,.3);
+  --ghost-hover-edge:#3a3d43;
+  --btn-accent-fg:#04231a;
 }
 *,*::before,*::after{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
@@ -44,7 +87,13 @@ header{display:flex;align-items:center;justify-content:space-between;gap:16px;
 .brand-t{font-size:16px;font-weight:600;letter-spacing:-.02em}
 .brand-s{font-size:12px;color:var(--text-dim);margin-top:2px}
 .env-tag{font-size:11px;padding:3px 9px;border-radius:100px;
-  background:var(--warn-dim);border:1px solid var(--warn-line);color:#e0b775}
+  background:var(--warn-dim);border:1px solid var(--warn-line);color:var(--warn-text)}
+.theme-sw{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;
+  border:1px solid var(--border);border-radius:100px;background:var(--surface);
+  font-size:12px;color:var(--text-muted);flex:none;
+  transition:color .16s var(--ease),border-color .16s var(--ease),background-color .16s var(--ease)}
+.theme-sw:hover{color:var(--text);border-color:var(--accent-line);background:var(--accent-dim)}
+@media (max-width:640px){ .theme-sw span{display:none} .theme-sw{padding:0 9px} }
 
 /* ── 卡片 ── */
 .card{background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--r-lg);
@@ -74,11 +123,11 @@ header{display:flex;align-items:center;justify-content:space-between;gap:16px;
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
   height:42px;padding:0 20px;border-radius:var(--r-sm);font-size:14px;font-weight:500;
   border:1px solid transparent;transition:all .16s var(--ease);white-space:nowrap}
-.btn-primary{background:var(--accent);color:#fff}
-.btn-primary:hover:not(:disabled){background:#6b76da}
+.btn-primary{background:var(--accent);color:var(--accent-on)}
+.btn-primary:hover:not(:disabled){background:var(--accent-hover)}
 .btn-primary:disabled{opacity:.5;cursor:not-allowed}
 .btn-ghost{border-color:var(--border-strong);background:var(--surface);color:var(--text)}
-.btn-ghost:hover{border-color:#3a3d43;background:var(--surface-2)}
+.btn-ghost:hover{border-color:var(--ghost-hover-edge);background:var(--surface-2)}
 .btn:active:not(:disabled){transform:translateY(1px)}
 .btn-sm{height:34px;padding:0 14px;font-size:13px}
 
@@ -113,7 +162,7 @@ header{display:flex;align-items:center;justify-content:space-between;gap:16px;
   border:1px solid var(--border);border-radius:var(--r);transition:all .18s var(--ease)}
 .entry:hover{border-color:var(--accent-line);background:var(--surface-2);transform:translateY(-2px)}
 .entry-ico{width:34px;height:34px;border-radius:var(--r-sm);background:var(--accent-dim);
-  border:1px solid var(--accent-line);display:grid;place-items:center;color:#a9b0e0}
+  border:1px solid var(--accent-line);display:grid;place-items:center;color:var(--accent-text)}
 .entry-t{font-size:14px;font-weight:500}
 .entry-d{font-size:12px;color:var(--text-dim);line-height:1.55}
 .entry-url{font-family:var(--mono);font-size:10.5px;color:var(--text-dim);
@@ -134,10 +183,10 @@ tr:last-child td{border-bottom:none}
 /* ── 提示条 ── */
 .note{display:flex;gap:9px;padding:11px 14px;border-radius:var(--r-sm);font-size:12.5px;
   line-height:1.65;margin-bottom:16px}
-.note.warn{background:var(--warn-dim);border:1px solid var(--warn-line);color:#e0b775}
-.note.info{background:var(--accent-dim);border:1px solid var(--accent-line);color:#a9b0e0}
+.note.warn{background:var(--warn-dim);border:1px solid var(--warn-line);color:var(--warn-text)}
+.note.info{background:var(--accent-dim);border:1px solid var(--accent-line);color:var(--accent-text)}
 .note b{font-weight:600}
-.note code{font-family:var(--mono);font-size:11.5px;background:rgba(0,0,0,.3);
+.note code{font-family:var(--mono);font-size:11.5px;background:var(--code-bg);
   padding:1px 5px;border-radius:3px}
 
 /* ── 密钥 ── */
@@ -159,8 +208,8 @@ footer{border-top:1px solid var(--border);padding-top:18px;margin-top:28px;
   .status-grid{grid-template-columns:1fr}
 }
 
-.btn-accent{background:var(--ok);color:#04231a}
-.btn-accent:hover:not(:disabled){background:#1ad39b}
+.btn-accent{background:var(--ok);color:var(--btn-accent-fg)}
+.btn-accent:hover:not(:disabled){background:var(--ok-hover)}
 .btn-accent:disabled{opacity:.5;cursor:not-allowed}
 .run-grid{display:grid;grid-template-columns:auto auto 1fr;gap:12px;align-items:center}
 @media (max-width:760px){
@@ -182,6 +231,11 @@ footer{border-top:1px solid var(--border);padding-top:18px;margin-top:28px;
       </div>
     </div>
     <span class="env-tag" id="envTag">连接中…</span>
+    <button class="theme-sw" id="themeSw" type="button" aria-pressed="false" title="切换明亮 / 暗色">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+        <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/>
+      </svg><span id="themeSwText">暗色</span>
+    </button>
   </header>
 
   <!-- ══ 系统状态 ══ -->
@@ -416,7 +470,7 @@ async function loadStatus(){
     tag.textContent = '已连接 · 127.0.0.1:8000';
     tag.style.background = 'var(--ok-dim)';
     tag.style.borderColor = 'var(--ok-line)';
-    tag.style.color = '#4fd9b0';
+    tag.style.color = 'var(--ok-text)';
 
     // meta
     const m = await api('/meta');
@@ -432,7 +486,7 @@ async function loadStatus(){
     tag.textContent = '未连接 · 请确认后端已启动';
     tag.style.background = 'var(--err-dim)';
     tag.style.borderColor = 'var(--err-line)';
-    tag.style.color = '#f08ba6';
+    tag.style.color = 'var(--err-text)';
     $('dotSvc').className = 'dot err';
     $('vSvc').textContent = 'DOWN';
     $('vSvc').className = 'st-v neg';
@@ -788,6 +842,25 @@ $('clearKey').addEventListener('click', ()=>{
   syncRunBtn();
   log('密钥已清除，需要重新输入', 'warn');
 });
+
+/* ══════════ 主题 ══════════
+   本页颜色全在 CSS 变量里（含状态标签/日志四色），切换只改 data-theme，
+   无需重绘；#envTag 的配色也走 var()，所以不会卡在旧主题。 */
+function syncThemeBtn(){
+  const dark = themeGet() === 'dark';
+  const btn = $('themeSw');
+  if(!btn) return;
+  btn.setAttribute('aria-pressed', String(dark));
+  btn.title = dark ? '切换到明亮主题' : '切换到暗色主题';
+  const t = $('themeSwText');
+  if(t) t.textContent = dark ? '明亮' : '暗色';
+}
+(function bindTheme(){
+  const btn = $('themeSw');
+  if(btn) btn.addEventListener('click', ()=> themeToggle());
+  onThemeChange(syncThemeBtn);
+  syncThemeBtn();
+})();
 
 /* ══════════ 启动 ══════════ */
 initKey();

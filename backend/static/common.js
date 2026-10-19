@@ -194,13 +194,79 @@
     return v.toLocaleString('zh-CN');
   }
 
+  /* ───────── 7. 主题（daylight 明亮 / dark 暗色）─────────
+   * 约定：
+   *   - 明亮是**默认**，暗色为可选；主题写进 <html data-theme="light|dark">；
+   *   - CSS 只在 html[data-theme="dark"] 下覆盖变量，未设时即明亮；
+   *   - 主题值来源优先级：?theme= > localStorage > 默认 light；
+   *   - 脚本内需要随主题变化的颜色（如热力图色阶）通过 palette() 取，
+   *     并用 onThemeChange() 注册重绘，**不要**再在 JS 里写死色值。
+   * 防闪烁：页面 <head> 里有一小段内联脚本会提前设置 data-theme（见各页面），
+   * 那里不能依赖本文件（本文件是外部脚本，可能在首屏之后才执行）。
+   */
+  var THEME_KEY = 'sw-theme';
+  var THEME_VALID = { light: 1, dark: 1 };
+
+  function themeStorage(){
+    try { return (typeof localStorage !== 'undefined') ? localStorage : null; }
+    catch (e) { return null; }   /* 隐私模式 / file:// 下可能抛异常 */
+  }
+
+  /* 由 URL 参数取主题（不做严格校验，非法值视为未指定） */
+  function themeFromQuery(){
+    try {
+      if (typeof location === 'undefined' || !location.search) return null;
+      var m = /[?&]theme=([a-z]+)/i.exec(location.search);
+      if (!m) return null;
+      var v = String(m[1]).toLowerCase();
+      return THEME_VALID[v] ? v : null;
+    } catch (e) { return null; }
+  }
+
+  function themeGet(){
+    var q = themeFromQuery();
+    if (q) return q;
+    var st = themeStorage();
+    if (st) {
+      var saved = null;
+      try { saved = st.getItem(THEME_KEY); } catch (e) { saved = null; }
+      if (saved && THEME_VALID[saved]) return saved;
+    }
+    return 'light';
+  }
+
+  var _themeListeners = [];
+  function onThemeChange(fn){
+    if (typeof fn === 'function') _themeListeners.push(fn);
+  }
+
+  function themeSet(name){
+    var v = THEME_VALID[name] ? name : 'light';
+    var root = document.documentElement;
+    root.setAttribute('data-theme', v);
+    /* 通知浏览器原生控件（滚动条 / 表单徽标）跟随 */
+    root.style.colorScheme = (v === 'dark') ? 'dark' : 'light';
+    var st = themeStorage();
+    if (st) { try { st.setItem(THEME_KEY, v); } catch (e) { /* 忽略配额/隐私限制 */ } }
+    _themeListeners.forEach(function (fn) {
+      try { fn(v); } catch (e) { /* 单个监听器出错不影响其它页面逻辑 */ }
+    });
+    return v;
+  }
+
+  function themeToggle(){
+    return themeSet(themeGet() === 'dark' ? 'light' : 'dark');
+  }
+
   global.SW = {
     esc: esc, escAttr: escAttr, escUrl: escUrl, setText: setText,
     fnum: fnum, yi: yi, yiPlain: yiPlain, fmtAmt: fmtAmt, fmtYi: fmtYi,
     pctStr: pctStr, numToFixed: numToFixed,
     cls: cls, clsAdmin: clsAdmin, THRESHOLD: THRESHOLD,
     api: api, apiGet: apiGet, apiBase: apiBase, ApiError: ApiError, detailText: detailText,
-    tsCode: tsCode, bareCode: bareCode, debounce: debounce, thousands: thousands
+    tsCode: tsCode, bareCode: bareCode, debounce: debounce, thousands: thousands,
+    THEME_KEY: THEME_KEY,
+    themeGet: themeGet, themeSet: themeSet, themeToggle: themeToggle, onThemeChange: onThemeChange
   };
 
   /* 同时挂到全局的常用短名，尽量减少对既有代码的侵入式改写。
@@ -224,4 +290,9 @@
   global.api = api;
   global.apiGet = apiGet;
   global.setSafeText = setText;
+  /* 主题：页面里直接写 themeToggle(...) / onThemeChange(...) 也能用 */
+  global.themeGet = themeGet;
+  global.themeSet = themeSet;
+  global.themeToggle = themeToggle;
+  global.onThemeChange = onThemeChange;
 }(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this)));

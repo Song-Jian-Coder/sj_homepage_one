@@ -17,20 +17,80 @@
      其余指令仍是实打实的加固：object-src none（插件类注入）、base-uri self
      （base 标签劫持）、form-action self（表单外发）、default-src 域白名单。 -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' http://127.0.0.1:8000; object-src 'none'; base-uri 'self'; form-action 'self'">
+<!-- 防闪烁（FOUC）：必须在 CSS 之前把 data-theme 定好，否则暗色用户会先见一帧白屏。
+     这里不能调用 common.js 里的 themeGet —— 那是外部脚本，执行时机在本段之后。
+     规则与 SW.themeGet 保持一致：?theme= > localStorage > 默认 light。 -->
+<script>
+(function(){try{
+  var m=/[?&]theme=([a-z]+)/i.exec(location.search),q=m&&m[1].toLowerCase();
+  var s=null;try{s=localStorage.getItem('sw-theme')}catch(e){}
+  var t=(q==='dark'||q==='light')?q:((s==='dark'||s==='light')?s:'light');
+  var r=document.documentElement;
+  r.setAttribute('data-theme',t);
+  r.style.colorScheme=(t==='dark')?'dark':'light';
+}catch(e){}})();
+</script>
 <style>
+/* ══════════════════════════════════════════════════════════════
+   主题：明亮（daylight，默认） / 暗色（?theme=dark 或右上角切换）
+   - 明亮值写在 :root；暗色只在 html[data-theme="dark"] 下覆盖
+   - 颜色语义只经变量暴露，JS 里需要随主题变的颜色走 SW.themePalette
+   - 新增变量（--chrome/--scrim/--tile-edge/--legend-mid/--shadow…）
+     是为了收口原来散落的 15 处「暗色专用 rgba」，它们换成明亮主题后会失效
+   ══════════════════════════════════════════════════════════════ */
 :root{
+  /* 层次：纸 → 卡片 → 内嵌 */
+  --bg:#fbfcfd; --bg-elev:#ffffff; --surface:#f4f6f8; --surface-2:#eef1f4;
+  /* 线条：明亮主题的边界全靠它 */
+  --border:#e3e8ed; --border-strong:#cfd6de;
+  /* 文字三级（对比度 15.9 / 7.9 / 4.6） */
+  --text:#14181d; --text-muted:#4a5460; --text-dim:#66717e;
+  /* 涨跌：A 股红涨绿跌，语义不变，只降饱和（作文字 4.6:1 / 4.9:1） */
+  --up:#d13438; --up-dim:rgba(209,52,56,.08); --up-line:rgba(209,52,56,.32);
+  --down:#0b7d59; --down-dim:rgba(11,125,89,.08); --down-line:rgba(11,125,89,.32);
+  --flat:#8892a0;
+  /* 强调色：浅底加深（白字 5.2:1） */
+  --accent:#4a55c8; --accent-hover:#3d47b4;
+  --accent-dim:rgba(74,85,200,.08); --accent-line:rgba(74,85,200,.28);
+  --accent-text:#3f49b0;
+  /* 主题相关的中性填充 */
+  --chrome:rgba(251,252,253,.86);   /* 顶栏/控制条半透明底 */
+  --scrim:rgba(16,24,40,.28);       /* 抽屉遮罩 */
+  --tile-edge:rgba(16,24,40,.06);   /* 热力块描边 */
+  --tile-hover-edge:rgba(16,24,40,.18);
+  --tile-hover-shadow:0 4px 12px rgba(16,24,40,.09);
+  --tile-hover-filter:brightness(.97);
+  --legend-mid:#e8ecf0;             /* 图例渐变中段 */
+  --seg-shadow:0 1px 2px rgba(16,24,40,.10);
+  --panel-shadow:0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.04);
+  --drawer-shadow:-8px 0 40px rgba(16,24,40,.10);
+
+  --font:'Inter','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+  --mono:'JetBrains Mono',Consolas,monospace;
+  --r-sm:6px; --r:10px; --r-lg:14px;
+  --gutter:20px; --maxw:1560px;
+  --ease:cubic-bezier(.22,.61,.36,1);
+}
+html[data-theme="dark"]{
   --bg:#0a0b0d; --bg-elev:#101114; --surface:#16181c; --surface-2:#1c1f24;
   --border:#23262c; --border-strong:#2f333a;
   --text:#e8eaed; --text-muted:#8b9199; --text-dim:#5f666e;
   --up:#ff4d4f; --up-dim:rgba(255,77,79,.14); --up-line:rgba(255,77,79,.5);
   --down:#00c48c; --down-dim:rgba(0,196,140,.14); --down-line:rgba(0,196,140,.5);
   --flat:#4a4f57;
-  --accent:#5e6ad2;
-  --font:'Inter','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
-  --mono:'JetBrains Mono',Consolas,monospace;
-  --r-sm:6px; --r:10px; --r-lg:14px;
-  --gutter:20px; --maxw:1560px;
-  --ease:cubic-bezier(.22,.61,.36,1);
+  --accent:#5e6ad2; --accent-hover:#6b76da;
+  --accent-dim:rgba(94,106,210,.12); --accent-line:rgba(94,106,210,.35);
+  --accent-text:#a9b0e0;
+  --chrome:rgba(10,11,13,.88);
+  --scrim:rgba(0,0,0,.62);
+  --tile-edge:rgba(255,255,255,.06);
+  --tile-hover-edge:rgba(255,255,255,.3);
+  --tile-hover-shadow:0 6px 20px rgba(0,0,0,.5);
+  --tile-hover-filter:brightness(1.08);
+  --legend-mid:#2a2e34;
+  --seg-shadow:0 1px 2px rgba(0,0,0,.3);
+  --panel-shadow:none;
+  --drawer-shadow:none;
 }
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -49,7 +109,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 /* ── 顶栏 ── */
 header{
   position:sticky;top:0;z-index:60;
-  background:rgba(10,11,13,.86);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  background:var(--chrome);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   border-bottom:1px solid var(--border);
 }
 .bar{display:flex;align-items:center;gap:18px;height:56px}
@@ -69,10 +129,21 @@ header{
 .live-dot{width:6px;height:6px;border-radius:50%;background:var(--down);box-shadow:0 0 0 3px var(--down-dim);animation:pulse 2s var(--ease) infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
+/* ── 主题切换 ── */
+.theme-sw{
+  display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;
+  border:1px solid var(--border-strong);border-radius:100px;
+  font-size:11.5px;color:var(--text-muted);background:var(--bg-elev);flex:none;
+  transition:color .16s var(--ease),border-color .16s var(--ease),background-color .16s var(--ease);
+}
+.theme-sw:hover{color:var(--text);border-color:var(--accent-line);background:var(--accent-dim)}
+.theme-sw:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:640px){ .theme-sw span{display:none} .theme-sw{padding:0 8px} }
+
 /* ── 控制条 ── */
 .controls{
   position:sticky;top:56px;z-index:50;
-  background:rgba(10,11,13,.9);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  background:var(--chrome);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   border-bottom:1px solid var(--border);padding:11px 0;
 }
 .ctrl-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -82,7 +153,7 @@ header{
   transition:background-color .16s var(--ease),color .16s var(--ease);white-space:nowrap;
 }
 .seg button:hover{color:var(--text)}
-.seg button[aria-pressed="true"]{background:var(--surface-2);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.seg button[aria-pressed="true"]{background:var(--surface-2);color:var(--text);box-shadow:var(--seg-shadow)}
 .search{
   display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
@@ -123,7 +194,7 @@ header{
 .legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:var(--text-dim);white-space:nowrap}
 .legend-bar{
   width:104px;height:7px;border-radius:100px;
-  background:linear-gradient(90deg,var(--down) 0%,#2a2e34 50%,var(--up) 100%);
+  background:linear-gradient(90deg,var(--down) 0%,var(--legend-mid) 50%,var(--up) 100%);
 }
 #treemap{padding:6px}
 .tile-grid{
@@ -134,12 +205,12 @@ header{
 
 .tile{
   border-radius:var(--r-sm);overflow:hidden;cursor:pointer;
-  border:1px solid rgba(255,255,255,.06);padding:9px 10px;
+  border:1px solid var(--tile-edge);padding:9px 10px;
   min-height:66px;
   transition:transform .16s var(--ease),border-color .16s var(--ease),box-shadow .16s var(--ease),filter .16s var(--ease);
   display:flex;flex-direction:column;justify-content:space-between;gap:6px;
 }
-.tile:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.3);box-shadow:0 6px 20px rgba(0,0,0,.5);z-index:5;filter:brightness(1.08)}
+.tile:hover{transform:translateY(-2px);border-color:var(--tile-hover-edge);box-shadow:var(--tile-hover-shadow);z-index:5;filter:var(--tile-hover-filter)}
 .tile:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .tile:active{transform:translateY(0)}
 .tile-name{
@@ -180,7 +251,7 @@ tbody tr:last-child td{border-bottom:none}
 
 /* ── 抽屉 ── */
 .scrim{
-  position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:100;
+  position:fixed;inset:0;background:var(--scrim);z-index:100;
   opacity:0;pointer-events:none;transition:opacity .24s var(--ease);
   backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
 }
@@ -201,7 +272,7 @@ tbody tr:last-child td{border-bottom:none}
   padding:6px 11px;border:1px solid var(--border);border-radius:var(--r-sm);
   transition:all .16s var(--ease);white-space:nowrap;
 }
-.jump-link:hover{color:#a9b0e0;border-color:var(--accent-line);background:var(--accent-dim)}
+.jump-link:hover{color:var(--accent-text);border-color:var(--accent-line);background:var(--accent-dim)}
 @media (max-width:560px){ .jump-link{display:none} }
 .drawer-close{
   position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:var(--r-sm);
@@ -229,10 +300,10 @@ footer{
 .foot{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
 .warn{
   display:flex;align-items:flex-start;gap:9px;padding:12px 15px;margin-bottom:18px;
-  background:rgba(94,106,210,.07);border:1px solid rgba(94,106,210,.22);
-  border-radius:var(--r);font-size:12.5px;color:#a9b0e0;line-height:1.6;
+  background:var(--accent-dim);border:1px solid var(--accent-line);
+  border-radius:var(--r);font-size:12.5px;color:var(--accent-text);line-height:1.6;
 }
-.warn b{color:#c3c8f0;font-weight:600}
+.warn b{color:var(--accent-text);font-weight:600}
 
 @media (max-width:1080px){
   .overview{grid-template-columns:repeat(2,1fr)}
@@ -251,6 +322,15 @@ footer{
   .controls{top:52px}
   .drawer{width:100%}
 }
+/* 窄屏顶栏收口：.live 的内容宽 ~200px 且 flex:none，叠加 brand / 控制台 / 主题按钮
+   会把 .bar 撑到 514px（390 视口实测），主题按钮被挤出可视区点不到。
+   body 的 overflow-x:hidden 只掩盖视觉，documentElement.scrollWidth 仍暴露溢出。
+   —— 2026-10-19 theme-check.js 实测发现（docs/09 §4.1 当时按 body 口径未测出）。 */
+@media (max-width:560px){
+  .bar{gap:10px}
+  .live{min-width:0;flex:0 1 auto;overflow:hidden;padding:0 8px}
+  .live #liveText{display:none}   /* 状态点保留，文字让位给主题按钮 */
+}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}
 }
@@ -264,7 +344,7 @@ footer{
   transition:all .16s cubic-bezier(.22,.61,.36,1);
   text-decoration:none;white-space:nowrap;
 }
-.back-admin:hover{color:#c3c8f0;border-color:var(--accent-line);background:var(--accent-dim)}
+.back-admin:hover{color:var(--accent-text);border-color:var(--accent-line);background:var(--accent-dim)}
 .back-admin svg{flex:none}
 @media (max-width:640px){ .back-admin span{display:none} .back-admin{padding:0 10px} }
 
@@ -288,6 +368,11 @@ footer{
       <span>两市成交 <b id="mAmt">—</b></span>
     </div>
     <div class="live"><span class="live-dot"></span><span id="liveText">模拟数据</span></div>
+    <button class="theme-sw" id="themeSw" type="button" aria-pressed="false" title="切换明亮 / 暗色">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+        <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/>
+      </svg><span id="themeSwText">暗色</span>
+    </button>
   </div>
 </header>
 
@@ -474,18 +559,42 @@ function ratioStr(x){
   return r == null ? '—' : pctStr(r * 100);
 }
 
-/* 颜色档位（6 级） */
-const UP_STEPS=[['rgba(255,77,79,.16)','#ffd9d9'],['rgba(255,77,79,.28)','#ffd0d0'],
-                ['rgba(255,77,79,.45)','#ffc4c4'],['rgba(255,77,79,.64)','#ffb8b8'],
-                ['rgba(255,77,79,.82)','#fff'],['rgba(255,77,79,1)','#fff']];
-const DN_STEPS=[['rgba(0,196,140,.16)','#c9f7e8'],['rgba(0,196,140,.28)','#bdf4e2'],
-                ['rgba(0,196,140,.45)','#a9efda'],['rgba(0,196,140,.64)','#93e9d0'],
-                ['rgba(0,196,140,.82)','#fff'],['rgba(0,196,140,1)','#fff']];
+/* 颜色档位（6 级）—— 两套主题各一组
+   ⚠ 明亮主题不能沿用暗色那套「同色相叠透明度」：白底上会糊成脏粉色。
+   ⚠ 每一档的文字色按 WCAG AA（≥4.5:1）逐档实测选定，不是随手填的：
+       透明度 10/20/32/50 → 用深字（深色 #6b171c / #043626）
+       透明度 80/100      → 用白字
+     中间不存在「深字白字都不达标」的档位（这是一开始按 .28/.44/.64/.82
+     排时出现的问题：第 5 档深字 2.89、白字 3.6，两边都过不了）。
+     实测（对纯白底合成后）：红 10.08/8.47/6.79/4.77/4.58/6.41，
+                              绿 11.52/9.77/7.91/5.60/4.62/7.38。
+   ⚠ 平盘兜底色由 CSS 变量给出（JS 生成的内联 style 里 var() 同样生效）。 */
+const TILE_STEPS = {
+  light: {
+    up: [['rgba(184,32,42,.10)','#6b171c'], ['rgba(184,32,42,.20)','#6b171c'],
+         ['rgba(184,32,42,.32)','#6b171c'], ['rgba(184,32,42,.50)','#6b171c'],
+         ['rgba(184,32,42,.80)','#ffffff'], ['rgba(184,32,42,1)','#ffffff']],
+    dn: [['rgba(8,98,70,.10)','#043626'], ['rgba(8,98,70,.20)','#043626'],
+         ['rgba(8,98,70,.32)','#043626'], ['rgba(8,98,70,.50)','#043626'],
+         ['rgba(8,98,70,.80)','#ffffff'], ['rgba(8,98,70,1)','#ffffff']],
+    flat: ['var(--surface-2)','var(--text-muted)']
+  },
+  dark: {
+    up: [['rgba(255,77,79,.16)','#ffd9d9'], ['rgba(255,77,79,.28)','#ffd0d0'],
+         ['rgba(255,77,79,.45)','#ffc4c4'], ['rgba(255,77,79,.64)','#ffb8b8'],
+         ['rgba(255,77,79,.82)','#fff'], ['rgba(255,77,79,1)','#fff']],
+    dn: [['rgba(0,196,140,.16)','#c9f7e8'], ['rgba(0,196,140,.28)','#bdf4e2'],
+         ['rgba(0,196,140,.45)','#a9efda'], ['rgba(0,196,140,.64)','#93e9d0'],
+         ['rgba(0,196,140,.82)','#fff'], ['rgba(0,196,140,1)','#fff']],
+    flat: ['var(--surface-2)','var(--text-muted)']
+  }
+};
 function tileColor(v, maxAbs){
-  if(Math.abs(v)<0.01) return ['#22252a','#c9ced6'];
+  const S = TILE_STEPS[themeGet() === 'dark' ? 'dark' : 'light'];
+  if(Math.abs(v)<0.01) return S.flat;
   const t = Math.min(Math.abs(v)/maxAbs, 1);
   const idx = Math.min(Math.floor(t*6), 5);
-  return v>0 ? UP_STEPS[idx] : DN_STEPS[idx];
+  return v>0 ? S.up[idx] : S.dn[idx];
 }
 function barColor(v){
   return v>0 ? 'var(--up)' : (v<0 ? 'var(--down)' : 'var(--flat)');
@@ -692,6 +801,25 @@ document.getElementById('dClose').addEventListener('click', closeDrawer);
 document.getElementById('scrim').addEventListener('click', closeDrawer);
 document.addEventListener('keydown', trapFocus);
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeDrawer(); });
+
+/* ══════ 主题 ══════
+   色阶由 JS 生成（tileColor 读 themeGet()），所以切主题后必须重绘，
+   否则热力块会停留在旧主题的配色上。 */
+function syncThemeBtn(){
+  const dark = themeGet() === 'dark';
+  const btn = document.getElementById('themeSw');
+  if(!btn) return;
+  btn.setAttribute('aria-pressed', String(dark));
+  btn.title = dark ? '切换到明亮主题' : '切换到暗色主题';
+  const t = document.getElementById('themeSwText');
+  if(t) t.textContent = dark ? '明亮' : '暗色';
+}
+(function bindTheme(){
+  const btn = document.getElementById('themeSw');
+  if(btn) btn.addEventListener('click', function(){ themeToggle(); });
+  onThemeChange(function(){ syncThemeBtn(); render(); });
+  syncThemeBtn();
+})();
 
 
 

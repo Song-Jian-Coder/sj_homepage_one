@@ -23,7 +23,9 @@ const STATIC_DIR = path.join(__dirname, '..', 'static');
 
 const targets = (process.argv.slice(2).length
   ? process.argv.slice(2)
-  : ['industry.html']
+  /* 默认校验三张看板页：此前只查 industry.html，fundflow/admin 的语法错误
+     会被漏掉（docs/09 §4 是显式传三页才覆盖到的）。 */
+  : ['industry.html', 'fundflow.html', 'admin.html']
 ).map(f => path.resolve(STATIC_DIR, f));
 
 const tmp = path.join(os.tmpdir(), 'biancheng-syntax-check.js');
