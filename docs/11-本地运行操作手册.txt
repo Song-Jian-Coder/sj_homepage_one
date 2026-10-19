@@ -1,0 +1,401 @@
+﻿==============================================================================
+  申万行业资金流看板 · 本地运行操作手册
+==============================================================================
+  项目路径 : C:\[AI工作区]\biancheng
+  技术形态 : 静态看板(3 页) + FastAPI + MySQL 8.0 + Python ETL
+  适用系统 : Windows 10/11，PowerShell
+  首次部署 : 约 10 分钟（含装依赖）
+  日常启动 : 约 10 秒
+  最后更新 : 2026-10-19
+
+  阅读顺序：第 0 步 → 第 8 步，按顺序做。第 9 步以后是按需查阅。
+------------------------------------------------------------------------------
+
+
+==============================================================================
+  第 0 步  确认前提（只做一次）
+==============================================================================
+
+需要三样东西，缺一样都启动不了：
+
+  1) Python 3.11 或更高
+  2) Node.js 18 或更高（只在跑前端自检时需要；只启动服务可以不装）
+  3) MySQL 8.0，且已启动，且库里已有数据（库名 stock_data）
+
+检查命令（在 PowerShell 里逐条执行）：
+
+  python -V
+  node -v
+  Get-Service MySQL80
+
+期望结果：
+  Python 3.13.x
+  v24.x.x
+  状态为 Running
+
+如果 python 找不到，用完整路径试：
+  & "C:\Users\57424\AppData\Local\Programs\Python\Python313\python.exe" -V
+
+  ★ 找不到也不用担心：scripts\start.ps1 会自己去常见安装位置找解释器，
+    不依赖 PATH。
+
+如果 MySQL80 不是 Running，先启动它：
+  Start-Service MySQL80      （可能需要管理员权限）
+
+
+==============================================================================
+  第 1 步  进入仓库根目录
+==============================================================================
+
+所有命令都在“仓库根”执行，不是 backend 目录。
+
+  cd C:\[AI工作区]\biancheng
+
+确认位置对不对：
+
+  Get-Location
+  Get-ChildItem
+
+应该看到：backend、docs、scripts、README.md、.env.example 等。
+
+  ★ 常见错误：在 backend 目录里执行 scripts\start.ps1
+    会报“-File 形式参数的实际参数 scripts\start.ps1 不存在”。
+    如果必须待在 backend 目录，就用 ..\scripts\start.ps1。
+
+
+==============================================================================
+  第 2 步  检查数据库配置（只做一次）
+==============================================================================
+
+配置文件：backend\.env
+它已被 .gitignore 忽略，不会上传到 GitHub。
+
+  ★★ 千万不要执行 Copy-Item .env.example backend\.env
+     它会覆盖掉真实密码（Copy-Item 保留原文件时间戳，事后看不出来），
+     症状是启动后 /api/v1/health 返回 db=down、日志写 1045。
+
+正确做法：
+
+  如果 backend\.env 不存在：
+    if (-not (Test-Path backend\.env)) { Copy-Item .env.example backend\.env }
+
+  然后编辑它，至少确认这几行：
+    DB_HOST=localhost
+    DB_PORT=3306
+    DB_USER=root
+    DB_PASSWORD=<你的 MySQL root 密码>
+    DB_NAME=stock_data
+    TS_TOKEN_FILE=C:\Users\57424\jsdata_tk.csv
+
+  打开编辑：
+    notepad backend\.env
+
+  ADMIN_KEY 可以先留空：留空时管理接口一律拒绝（40102），这是安全设计，
+  不影响三个看板页面正常浏览；要用管理台的“全量更新/增量更新”才需要填。
+
+本机当前状态：backend\.env 已配置好，凭据可用，一般不需要再改。
+
+
+==============================================================================
+  第 3 步  创建虚拟环境并安装依赖（只做一次）
+==============================================================================
+
+  powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1
+
+它会做：
+  - 在 backend\.venv 建虚拟环境
+  - 安装 fastapi / uvicorn / pymysql / python-dotenv / requests / pytest / httpx
+  - 验证 import
+
+期望输出结尾：
+  ==> Verifying imports
+  runtime deps OK
+  test deps OK
+
+已存在 venv 时重复执行是安全的（会跳过创建、依赖显示 already satisfied）。
+要重建就加 -Force：
+  powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -Force
+
+
+==============================================================================
+  第 4 步  启动后端服务
+==============================================================================
+
+  powershell -ExecutionPolicy Bypass -File scripts\start.ps1
+
+它会依次检查：解释器 → 依赖 → .env → 8000 端口 → 启动 → 等健康检查。
+
+成功时输出（关键三行）：
+
+  ==> Locating Python interpreter
+    OK  C:\[AI工作区]\biancheng\backend\.venv\Scripts\python.exe
+  ==> Checking runtime dependencies
+    OK  fastapi / uvicorn / pymysql / python-dotenv
+  ==> Checking backend\.env
+    OK  C:\[AI工作区]\biancheng\backend\.env
+  ==> Checking port 8000
+  ==> Starting uvicorn on http://127.0.0.1:8000
+    OK  PID xxxxx (log: backend\.run\api.stdout.log)
+    OK  Healthy (db=up)                    ←←← 必须是 db=up
+
+    Dashboard : http://127.0.0.1:8000/industry.html
+    Fund flow : http://127.0.0.1:8000/fundflow.html
+    Admin     : http://127.0.0.1:8000/admin.html
+    API docs  : http://127.0.0.1:8000/docs
+
+  Dark theme: append ?theme=dark to any page URL
+  Stop with : powershell -File scripts\stop.ps1
+
+  服务在后台运行，这个窗口可以继续用。
+
+  ★ 不要看到 Healthy 就以为成功，要看括号里是 db=up。
+    如果显示 db=down，脚本会以退出码 1 结束并打印 backend\api_run.log 尾部，
+    按第 10 步的“db=down”排查。
+
+换端口（8000 被别的程序占用时）：
+  powershell -ExecutionPolicy Bypass -File scripts\start.ps1 -Port 8080
+
+想在前台看实时日志（调试用）：
+  powershell -ExecutionPolicy Bypass -File scripts\start.ps1 -Foreground
+
+重复执行 start.ps1 是安全的：已在运行会提示 Already running 并退出 0。
+
+
+==============================================================================
+  第 5 步  确认服务健康（可选，10 秒）
+==============================================================================
+
+  Invoke-WebRequest http://127.0.0.1:8000/api/v1/health -UseBasicParsing |
+    Select-Object -ExpandProperty Content
+
+期望：
+  {"code":0,"msg":"ok","data":{"status":"up","db":"up","latestTradeDate":"2026-10-19"},...}
+
+只要 db 是 up 就说明数据库通了。
+
+
+==============================================================================
+  第 6 步  打开浏览器，输入地址，看到完整界面
+==============================================================================
+
+浏览器地址栏依次输入（推荐按这个顺序看）：
+
+  1) 行业分类与个股浏览（首页，信息最全）
+     http://127.0.0.1:8000/industry.html
+
+     应该看到：
+       - 顶栏：品牌 + 搜索框 + “暗色”按钮 + “控制台”链接
+       - 统计行：31 一级 · 134 二级 · 346 三级 · 4938 只股票
+       - 左侧/主体：31 个一级行业卡片，可逐级展开到二级、三级、成分股
+       - 页面整体是浅色（白底、深灰字），这是默认的“明亮主题”
+
+  2) 资金流热力图（主力净流入看板）
+     http://127.0.0.1:8000/fundflow.html
+
+     应该看到：
+       - 顶栏状态：“真实数据 · 数据日期 2026-10-19”
+         （如果这里写“模拟数据”，说明浏览器用的是旧缓存，按 Ctrl+F5 强制刷新）
+       - 概览四个数字：净流入行业 / 净流出行业 / 主力净流入合计 / 最强最弱
+       - 热力图：134 个行业方块，红涨绿跌，颜色越深资金越集中
+       - 右上角图例：流出 ← 渐变 → 流入
+
+  3) 数据管理控制台
+     http://127.0.0.1:8000/admin.html
+
+     应该看到：
+       - 服务与数据库状态
+       - “加载”按钮、ETL 任务按钮、日志区
+       - 未配置 ADMIN_KEY 时，接口会返回 40102（预期行为，不是故障）
+
+  4) 接口文档（开发用）
+     http://127.0.0.1:8000/docs
+
+  5) 根地址（会自动跳到行业分类页）
+     http://127.0.0.1:8000/
+
+  主题切换：
+    - 默认明亮；点顶栏“暗色”按钮变暗，按钮文字变“明亮”
+    - 刷新后保持（存在 localStorage 的 sw-theme 键）
+    - 地址后加 ?theme=dark 可强制暗色，加 ?theme=light 强制明亮
+    - ?theme= 的优先级高于按钮记忆
+
+  ★ 界面显示不完整 / 是旧样式的处理顺序：
+    1) Ctrl+F5 强制刷新（后端已发 Cache-Control: no-cache，普通刷新通常就够）
+    2) F12 打开控制台，看 Console 有没有红色报错
+    3) F12 → Network，看 industry.html 的状态是不是 200（不是 304 之外的问题）
+    4) 确认地址是 127.0.0.1:8000，不是之前遗留的旧标签页
+    5) 确认改的是 backend\static\ 里的文件（根目录副本已清理，不参与运行）
+
+
+==============================================================================
+  第 7 步  一键自检（可选，确认整条链路没坏）
+==============================================================================
+
+  powershell -ExecutionPolicy Bypass -File scripts\check.ps1
+
+共 26 项，全部 PASS 时结尾是：
+
+  ══════════════════════════════════════
+    checks 26  pass 26  fail 0
+  ══════════════════════════════════════
+
+内容包括：
+  [1] 后端健康 / meta
+  [2] 接口契约（行业树、成员、资金流、个股、错误信封、管理接口鉴权）
+  [3] 静态托管（三页 + common.js）
+  [4] 前端四工具（语法、全局引用、单元测试、XSS）
+  [5] 主题端到端 60 项（真实 Edge：明亮默认 / ?theme=dark / 持久化 / 1440+390 溢出）
+  [6] 浏览器回归 24 项（industry.html 真实交互）
+  [7] pytest（59 passed / 21 skipped）
+
+不想跑浏览器（没装 Node 或 Edge）：
+  powershell -ExecutionPolicy Bypass -File scripts\check.ps1 -SkipBrowser
+
+
+==============================================================================
+  第 8 步  停止服务
+==============================================================================
+
+  powershell -ExecutionPolicy Bypass -File scripts\stop.ps1
+
+只在需要时执行。它会精确匹配本项目自己的 uvicorn 进程，不会误杀别的程序。
+
+  默认停 8000；停别的端口：
+  powershell -ExecutionPolicy Bypass -File scripts\stop.ps1 -Port 8080
+
+
+==============================================================================
+  第 9 步  日常使用（最短路径）
+==============================================================================
+
+第一次已经做完第 0~3 步后，以后每次只需要两条：
+
+  cd C:\[AI工作区]\biancheng
+  powershell -ExecutionPolicy Bypass -File scripts\start.ps1
+
+然后浏览器打开：
+  http://127.0.0.1:8000/industry.html
+
+关机重启后同样两条即可（MySQL80 服务是自动启动的）。
+
+
+==============================================================================
+  第 10 步  常见问题排查
+==============================================================================
+
+【A】启动报“-File 形式参数的实际参数 scripts\start.ps1 不存在”
+  原因：当前目录不是仓库根。
+  解决：cd C:\[AI工作区]\biancheng  再执行；
+        或在 backend 目录用 ..\scripts\start.ps1。
+
+【B】启动报 10048 / 端口被占用
+  原因：8000 已被占用（可能是上次没停干净，或被别的程序占了）。
+  解决：
+    1) 先停本项目：powershell -File scripts\stop.ps1
+    2) 若提示“被非本项目进程占用”，换端口：-Port 8080
+    3) 查是谁占的：
+       Get-NetTCPConnection -LocalPort 8000 -State Listen |
+         Select-Object OwningProcess
+       Get-CimInstance Win32_Process -Filter "ProcessId=<上面查到的PID>" |
+         Select-Object Name,CommandLine
+
+【C】health 返回 db=down，或日志里 1045 Access denied
+  原因：backend\.env 的 DB_PASSWORD 为空或不对。
+  排查：
+    1) 看日志：Get-Content backend\api_run.log -Tail 20
+    2) 1045 = 密码错/空；2003 = MySQL 没起来或端口不对
+    3) 确认密码：mysql -uroot -p -e "SELECT 1"（能进就说明密码对）
+    4) 若 backend\.env 与 .env.example 内容完全一样，说明它被模板覆盖过，
+       需要重新填 DB_PASSWORD / ADMIN_KEY / TS_TOKEN_FILE
+    5) 改完 .env 必须重启服务才生效（stop 再 start）
+
+【D】页面显示“模拟数据”、样式是旧的、主题按钮点了没反应
+  原因：浏览器用了旧缓存（旧版 common.js 没有主题函数，导致脚本报错、数据不加载）。
+  解决：Ctrl+F5 强制刷新；仍不行则 F12 → Application → Clear site data。
+  后端已对 HTML/JS/CSS 发 Cache-Control: no-cache，正常刷新就能拿到新版。
+
+【E】管理台按钮报 40102 / “管理接口未启用”
+  原因：ADMIN_KEY 为空（设计如此，fail-closed）。
+  解决：生成一个随机串填进 backend\.env 的 ADMIN_KEY=，重启服务。
+        -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 32 |
+          ForEach-Object {[char]$_})
+
+【F】pytest 未安装 / check.ps1 的 [7] 失败
+  原因：没用 venv，或 venv 里没装测试依赖。
+  解决：powershell -File scripts\bootstrap.ps1
+
+【G】改了页面样式但没生效
+  1) 确认改的是 backend\static\ 下的文件（不是根目录副本，副本已清理）
+  2) Ctrl+F5
+  3) 改的是 app\ 下的 Python 代码？必须重启 uvicorn；改 etl.py 不用重启。
+
+【H】PowerShell 报“无法在管道中间运行文档”或“找不到文件”
+  原因：环境变量 PATHEXT 被裁剪，PowerShell 无法把 .exe 当程序执行。
+  解决：执行一次  $env:PATHEXT=".COM;.EXE;.BAT;.CMD"
+        本项目后台启动器 scripts\serve.py 已绕开这个限制。
+
+
+==============================================================================
+  第 11 步  目录与文件速查
+==============================================================================
+
+  C:\[AI工作区]\biancheng\
+    README.md                 项目总说明（Markdown 版）
+    docs\11-本地运行操作手册.txt   本文件
+    docs\01 ~ docs\10         架构、接口、审查、修复、流程图、主题与可执行化报告
+    .env.example              配置模板（不要直接覆盖 backend\.env）
+    backend\
+      .env                    真实配置（含密码，已被 git 忽略）
+      .venv\                  虚拟环境（bootstrap 创建）
+      app\                    FastAPI 代码（routers / services / schemas）
+      static\                 三张看板页 + common.js（唯一可运行前端）
+      etl.py                  数据采集入口
+      tests\                  pytest 用例
+      tools\                  前端与数据自检工具
+      api_run.log             API 运行日志（排查用）
+    scripts\
+      bootstrap.ps1           建环境装依赖
+      start.ps1               启动
+      stop.ps1                停止
+      check.ps1               一键验收 26 项
+      serve.py                后台启动器（供 start.ps1 调用）
+      lib-python.ps1          解释器探测
+    .run\                     PID 与 uvicorn 日志（已 git 忽略）
+
+
+==============================================================================
+  第 12 步  一页速查（贴墙版）
+==============================================================================
+
+  首次：
+    cd C:\[AI工作区]\biancheng
+    powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1
+    notepad backend\.env                    （确认 DB_PASSWORD）
+    powershell -ExecutionPolicy Bypass -File scripts\start.ps1
+
+  日常：
+    cd C:\[AI工作区]\biancheng
+    powershell -ExecutionPolicy Bypass -File scripts\start.ps1
+
+  打开：
+    http://127.0.0.1:8000/industry.html     行业分类（首页）
+    http://127.0.0.1:8000/fundflow.html     资金流热力图
+    http://127.0.0.1:8000/admin.html        数据管理控制台
+    http://127.0.0.1:8000/docs              接口文档
+
+  暗色：任一地址后加 ?theme=dark
+
+  自检：
+    powershell -ExecutionPolicy Bypass -File scripts\check.ps1
+
+  停止：
+    powershell -ExecutionPolicy Bypass -File scripts\stop.ps1
+
+  成功标志：
+    启动输出里有  OK  Healthy (db=up)
+    页面顶栏有  真实数据 · 数据日期 2026-10-19
+    整体是白色明亮主题，右上角按钮显示“暗色”
+
+==============================================================================
+  文档结束
+==============================================================================
