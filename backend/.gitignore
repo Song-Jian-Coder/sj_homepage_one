@@ -3,3 +3,6 @@
 etl_run.log
 __pycache__/
 *.pyc
+
+# scripts/bootstrap.ps1 创建的本机虚拟环境
+.venv/

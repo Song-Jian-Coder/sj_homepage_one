@@ -86,6 +86,22 @@ async def access_log(request: Request, call_next):
     return resp
 
 
+@app.middleware("http")
+async def cache_policy(request: Request, call_next):
+    """前端单文件项目：HTML / JS / CSS 每次必须回源校验。
+
+    背景（2026-10-19）：StaticFiles 只发 ETag + Last-Modified，不含 Cache-Control，
+    浏览器对这类响应走「启发式缓存」，于是改完主题后使用者仍看到旧页面
+    （表现为 fundflow 顶部停在「模拟数据」占位、三页配色不变），排查成本极高。
+    这里补 no-cache（可缓存，但每次使用前必须校验），命中 ETag 时是 304，开销可忽略。
+    """
+    resp = await call_next(request)
+    ct = resp.headers.get("content-type", "")
+    if ct.startswith(("text/html", "text/javascript", "application/javascript", "text/css")):
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
 @app.exception_handler(ApiError)
 async def api_error_handler(request: Request, exc: ApiError):
     """可预期的业务错误：HTTP 200 + {"code":40001,...}（沿用既有契约）。"""

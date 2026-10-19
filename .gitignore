@@ -1,6 +1,9 @@
 # 密钥与环境（绝不提交真实 .env）
 .env
 .env.local
+# .env 的本地备份也不许入库（2026-10-19 曾被 Copy-Item 覆盖，需要备份但必须留在仓库外或忽略）
+.env.bak
+.env.*.bak
 
 # 日志
 *.log
@@ -26,3 +29,7 @@ _*.txt
 # 本机数据库/数据源凭据与导出物
 *.dmp
 *.sql.gz
+
+# 运行时产物（scripts/start.ps1 + scripts/serve.py）
+.run/
+**/.venv/
