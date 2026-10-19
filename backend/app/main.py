@@ -97,8 +97,14 @@ async def cache_policy(request: Request, call_next):
     """
     resp = await call_next(request)
     ct = resp.headers.get("content-type", "")
-    if ct.startswith(("text/html", "text/javascript", "application/javascript", "text/css")):
+    if ct.startswith("text/html"):
+        # no-cache：可缓存，但每次使用前必须校验（命中 ETag 是 304，开销可忽略）
         resp.headers["Cache-Control"] = "no-cache"
+    elif ct.startswith(("text/javascript", "application/javascript", "text/css")):
+        # no-store：脚本/样式每次重新下载。本地服务没有带宽成本，但能杜绝
+        # 「改了 JS 浏览器仍用旧副本」——2026-10-19 实际发生：旧 common.js 缺
+        # themeGet，fundflow 在模块级自执行函数里抛错，整页脚本终止、数据不加载。
+        resp.headers["Cache-Control"] = "no-store"
     return resp
 
 

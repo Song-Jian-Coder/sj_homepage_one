@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- 共享层：转义 / API 封装 / 色板阈值（审查报告 8.12，三页共用同一份实现） -->
-<script src="common.js"></script>
+<script src="common.js?v=20261019"></script>
 <!-- CSP 兜底防线（审查报告 9.3-1 第 4 步）
      ⚠ 实测修正：审查报告建议的 script-src 收紧为同源，在本项目**会直接白屏** ——
      本页全部业务逻辑就是一个大内联脚本块，同源策略会把它自己拦掉
@@ -2015,8 +2015,15 @@ document.getElementById('collapseAll').addEventListener('click', ()=>{
 /* ═══════════ 主题 ═══════════
    本页随主题变化的颜色都在 CSS 变量里（含走势图 stroke / 四档 --q-*），
    所以切换只需改 data-theme，不必重绘 DOM；图表用的是 var()，会即时生效。 */
+/* themeIsDark(): common.js may still be an older cached copy without the theme
+   module. Calling themeGet() unconditionally throws a ReferenceError at module
+   level, which aborts this entire <script> block — init() then never runs and
+   the page stays on its placeholder. Keep every theme call behind typeof. */
+function themeIsDark(){
+  return (typeof themeGet === 'function') && themeGet() === 'dark';
+}
 function syncThemeBtn(){
-  const dark = themeGet() === 'dark';
+  const dark = themeIsDark();
   const btn = document.getElementById('themeSw');
   if(!btn) return;
   btn.setAttribute('aria-pressed', String(dark));
@@ -2026,8 +2033,8 @@ function syncThemeBtn(){
 }
 (function bindTheme(){
   const btn = document.getElementById('themeSw');
-  if(btn) btn.addEventListener('click', function(){ themeToggle(); });
-  onThemeChange(syncThemeBtn);
+  if(btn) btn.addEventListener('click', function(){ if (typeof themeToggle === 'function') themeToggle(); });
+  if (typeof onThemeChange === 'function') onThemeChange(syncThemeBtn);
   syncThemeBtn();
 })();
 

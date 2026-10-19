@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- 共享层：转义 / API 封装 / 色板阈值 -->
-<script src="common.js"></script>
+<script src="common.js?v=20261019"></script>
 <!-- CSP 兜底防线（审查报告 9.3-1 第 4 步）
      ⚠ 实测修正：把 script-src 收紧为同源会拦掉本页自己的大内联脚本块 → 白屏。
      script-src 必须显式带 unsafe-inline（单文件内联脚本、无构建步骤的必然代价）。
@@ -590,7 +590,7 @@ const TILE_STEPS = {
   }
 };
 function tileColor(v, maxAbs){
-  const S = TILE_STEPS[themeGet() === 'dark' ? 'dark' : 'light'];
+  const S = TILE_STEPS[themeIsDark() ? 'dark' : 'light'];
   if(Math.abs(v)<0.01) return S.flat;
   const t = Math.min(Math.abs(v)/maxAbs, 1);
   const idx = Math.min(Math.floor(t*6), 5);
@@ -805,8 +805,15 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeDrawer(); })
 /* ══════ 主题 ══════
    色阶由 JS 生成（tileColor 读 themeGet()），所以切主题后必须重绘，
    否则热力块会停留在旧主题的配色上。 */
+/* themeIsDark(): common.js may still be an older cached copy without the theme
+   module. Calling themeGet() unconditionally throws a ReferenceError at module
+   level, which aborts this entire <script> block — init() then never runs and
+   the page stays on its placeholder. Keep every theme call behind typeof. */
+function themeIsDark(){
+  return (typeof themeGet === 'function') && themeGet() === 'dark';
+}
 function syncThemeBtn(){
-  const dark = themeGet() === 'dark';
+  const dark = themeIsDark();
   const btn = document.getElementById('themeSw');
   if(!btn) return;
   btn.setAttribute('aria-pressed', String(dark));
@@ -816,8 +823,8 @@ function syncThemeBtn(){
 }
 (function bindTheme(){
   const btn = document.getElementById('themeSw');
-  if(btn) btn.addEventListener('click', function(){ themeToggle(); });
-  onThemeChange(function(){ syncThemeBtn(); render(); });
+  if(btn) btn.addEventListener('click', function(){ if (typeof themeToggle === 'function') themeToggle(); });
+  if (typeof onThemeChange === 'function') onThemeChange(function(){ syncThemeBtn(); render(); });
   syncThemeBtn();
 })();
 
